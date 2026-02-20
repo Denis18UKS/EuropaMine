@@ -19,6 +19,7 @@ public class ModBlockGroup {
                     .title(Component.translatable("creativetab.barotrauma_tab"))
                     .displayItems((pParameters, pOutput) -> {
                         pOutput.accept(ModBlocks.VENT_DECO.get());
+                        pOutput.accept(ModBlocks.VENT_DECO_INT.get());
                     })
                     .build());
 }

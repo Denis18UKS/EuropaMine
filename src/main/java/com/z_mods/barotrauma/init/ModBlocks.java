@@ -2,6 +2,7 @@ package com.z_mods.barotrauma.init;
 
 import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.blocks.VentDeco;
+import com.z_mods.barotrauma.blocks.VentDecoInt;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -17,6 +18,9 @@ public class ModBlocks {
 
     public static final RegistryObject<Block> VENT_DECO = registerBlock("vent_deco",
             VentDeco::new);
+    
+    public static final RegistryObject<Block> VENT_DECO_INT = registerBlock("vent_deco_int",
+            VentDecoInt::new);
 
     private static <T extends Block> RegistryObject<T> registerBlock(String name, Supplier<T> block) {
         RegistryObject<T> toReturn = BLOCKS.register(name, block);

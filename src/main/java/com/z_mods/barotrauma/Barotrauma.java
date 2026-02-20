@@ -6,6 +6,7 @@ import com.z_mods.barotrauma.init.ModBlockGroup;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModBlockEntities;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
+import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -68,6 +69,11 @@ public class Barotrauma {
                 BlockEntityRenderers.register(
                     ModBlockEntities.VENT_DECO.get(),
                     context -> new VentDecoRenderer()
+                );
+
+                BlockEntityRenderers.register(
+                    ModBlockEntities.VENT_DECO_INT.get(),
+                    context -> new VentDecoIntRenderer()
                 );
             });
         }

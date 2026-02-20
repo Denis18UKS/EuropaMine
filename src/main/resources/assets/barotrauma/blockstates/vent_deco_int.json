@@ -1,0 +1,8 @@
+{
+    "variants": {
+        "facing=north": { "model": "barotrauma:block/vent_deco_int" },
+        "facing=south": { "model": "barotrauma:block/vent_deco_int", "y": 180 },
+        "facing=west": { "model": "barotrauma:block/vent_deco_int", "y": 270 },
+        "facing=east": { "model": "barotrauma:block/vent_deco_int", "y": 90 }
+    }
+}

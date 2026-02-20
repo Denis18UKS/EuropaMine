@@ -1,10 +1,20 @@
 package com.z_mods.barotrauma.blocks;
 
 import com.z_mods.barotrauma.init.ModBlockEntities;
+import com.z_mods.barotrauma.menu.VentMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.MenuProvider; // ДОБАВЛЕННЫЙ ИМПОРТ
+import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
@@ -16,13 +26,17 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.shapes.Shapes;
 import org.jetbrains.annotations.Nullable;
+import net.minecraftforge.network.NetworkHooks;
+import net.minecraft.server.level.ServerPlayer;
 
 public class VentDecoInt extends BaseEntityBlock {
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    private static final Component CONTAINER_TITLE = Component.translatable("container.vent");
     
     private static final double DEPTH = 2.275 / 16.0;
     
@@ -99,11 +113,45 @@ public class VentDecoInt extends BaseEntityBlock {
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
     
+    @Override
+    public InteractionResult use(BlockState state, Level level, BlockPos pos,
+                                Player player, InteractionHand hand, BlockHitResult hit) {
+
+        if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+
+            level.playSound(
+                null,
+                pos,
+                SoundEvents.CHEST_OPEN,
+                SoundSource.BLOCKS,
+                0.5F,
+                level.random.nextFloat() * 0.1F + 0.9F
+            );
+
+            NetworkHooks.openScreen(
+                serverPlayer,
+                new SimpleMenuProvider(
+                    (id, inventory, p) -> new VentMenu(id, inventory, pos),
+                    CONTAINER_TITLE
+                ),
+                buf -> buf.writeBlockPos(pos)
+            );
+        }
+
+        return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+    
+    @Nullable
+    @Override
+    public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
+        return new SimpleMenuProvider((id, inventory, player) -> 
+            new VentMenu(id, inventory, pos), 
+            CONTAINER_TITLE);
+    }
+    
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new VentDecoIntEntity(pos, state);
     }
-    
-    // Убираем getTicker - GeckoLib не нуждается в нём
 }

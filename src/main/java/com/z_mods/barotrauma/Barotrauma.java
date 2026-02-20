@@ -5,8 +5,10 @@ import com.z_mods.barotrauma.init.ModBlocks;
 import com.z_mods.barotrauma.init.ModBlockGroup;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModBlockEntities;
+import com.z_mods.barotrauma.init.ModMenus; // ВАШ класс
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
+import com.z_mods.barotrauma.client.VentScreen; // ВАШ класс
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -18,6 +20,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.gui.screens.MenuScreens; // ЭТО ПРАВИЛЬНО - КЛАСС MINECRAFT
 import org.slf4j.Logger;
 import software.bernie.geckolib.GeckoLib;
 
@@ -29,14 +32,13 @@ public class Barotrauma {
     public Barotrauma() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // Инициализируем GeckoLib
         GeckoLib.initialize();
 
-        // Регистрируем все DeferredRegister
         ModItems.ITEMS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlockGroup.CREATIVE_MODE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
+        ModMenus.MENUS.register(modEventBus); // Регистрируем меню
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::addCreative);
@@ -51,6 +53,7 @@ public class Barotrauma {
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
         if (event.getTab() == ModBlockGroup.BAROTRAUMA_TAB.get()) {
             event.accept(ModBlocks.VENT_DECO.get());
+            event.accept(ModBlocks.VENT_DECO_INT.get());
         }
     }
 
@@ -65,7 +68,6 @@ public class Barotrauma {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
             event.enqueueWork(() -> {
-                // Регистрируем GeckoLib рендерер
                 BlockEntityRenderers.register(
                     ModBlockEntities.VENT_DECO.get(),
                     context -> new VentDecoRenderer()
@@ -75,6 +77,9 @@ public class Barotrauma {
                     ModBlockEntities.VENT_DECO_INT.get(),
                     context -> new VentDecoIntRenderer()
                 );
+                
+                // Регистрируем экран для меню
+                MenuScreens.register(ModMenus.VENT_MENU.get(), VentScreen::new);
             });
         }
     }

@@ -2,6 +2,8 @@
     "block.barotrauma.vent_deco": "Декоративная вентиляция",
     "block.barotrauma.vent_deco_int": "Интерактивная вентиляция",
     "block.barotrauma.navigation_terminal": "Навигационный терминал",
+    "item.barotrauma.slot_lock_tool": "Инструмент блокировки слотов",
+    "message.barotrauma.slot_lock_failed": "Нельзя заблокировать этот слот",
     "creativetab.barotrauma_tab": "Блоки Barotrauma",
     "container.vent": "Приоткрытая вентиляция"
 }

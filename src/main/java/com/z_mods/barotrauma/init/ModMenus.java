@@ -17,6 +17,7 @@ public class ModMenus {
     public static final RegistryObject<MenuType<VentMenu>> VENT_MENU = 
         MENUS.register("vent_menu", () -> IForgeMenuType.create((windowId, inv, data) -> {
             BlockPos pos = data.readBlockPos();
-            return new VentMenu(windowId, inv, pos);
+            String roleId = data.readUtf();
+            return new VentMenu(windowId, inv, pos, roleId.isBlank() ? null : roleId);
         }));
 }

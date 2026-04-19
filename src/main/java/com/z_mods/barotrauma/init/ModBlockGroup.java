@@ -20,6 +20,7 @@ public class ModBlockGroup {
                     .displayItems((pParameters, pOutput) -> {
                         pOutput.accept(ModBlocks.VENT_DECO.get());
                         pOutput.accept(ModBlocks.VENT_DECO_INT.get());
+                        pOutput.accept(ModBlocks.NAVIGATION_TERMINAL.get());
                     })
                     .build());
 }

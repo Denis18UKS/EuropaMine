@@ -54,6 +54,7 @@ public class Barotrauma {
         if (event.getTab() == ModBlockGroup.BAROTRAUMA_TAB.get()) {
             event.accept(ModBlocks.VENT_DECO.get());
             event.accept(ModBlocks.VENT_DECO_INT.get());
+            event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
         }
     }
 

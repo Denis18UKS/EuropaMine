@@ -1,0 +1,8 @@
+{
+    "variants": {
+        "facing=north": { "model": "barotrauma:block/nav_terminal" },
+        "facing=south": { "model": "barotrauma:block/nav_terminal", "y": 180 },
+        "facing=west": { "model": "barotrauma:block/nav_terminal", "y": 270 },
+        "facing=east": { "model": "barotrauma:block/nav_terminal", "y": 90 }
+    }
+}

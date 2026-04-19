@@ -1,6 +1,7 @@
 {
     "block.barotrauma.vent_deco": "Декоративная вентиляция",
     "block.barotrauma.vent_deco_int": "Интерактивная вентиляция",
+    "block.barotrauma.navigation_terminal": "Навигационный терминал",
     "creativetab.barotrauma_tab": "Блоки Barotrauma",
     "container.vent": "Приоткрытая вентиляция"
 }

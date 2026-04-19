@@ -1,11 +1,16 @@
 package com.z_mods.barotrauma.roles;
 
 import com.z_mods.barotrauma.Barotrauma;
+import com.z_mods.barotrauma.hud.ExtraHotbarStorage;
+import com.z_mods.barotrauma.network.ClientboundExtraHotbarSyncPacket;
+import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
 
 @Mod.EventBusSubscriber(modid = Barotrauma.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class RoleEvents {
@@ -42,7 +47,24 @@ public final class RoleEvents {
     public static void onPlayerClone(PlayerEvent.Clone event) {
         String roleId = PlayerRoleStorage.getRoleId(event.getOriginal());
         if (roleId != null) {
-            PlayerRoleStorage.setRoleId((net.minecraft.server.level.ServerPlayer) event.getEntity(), roleId);
+            PlayerRoleStorage.setRoleId((ServerPlayer) event.getEntity(), roleId);
+        }
+        ExtraHotbarStorage.copy(event.getOriginal(), event.getEntity());
+        if (event.getEntity() instanceof ServerPlayer player) {
+            ModNetworking.CHANNEL.send(
+                    PacketDistributor.PLAYER.with(() -> player),
+                    new ClientboundExtraHotbarSyncPacket(ExtraHotbarStorage.get(player))
+            );
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            ModNetworking.CHANNEL.send(
+                    PacketDistributor.PLAYER.with(() -> player),
+                    new ClientboundExtraHotbarSyncPacket(ExtraHotbarStorage.get(player))
+            );
         }
     }
 }

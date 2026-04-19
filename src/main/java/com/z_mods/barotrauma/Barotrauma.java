@@ -9,6 +9,7 @@ import com.z_mods.barotrauma.init.ModMenus; // ВАШ класс
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import com.z_mods.barotrauma.client.VentScreen; // ВАШ класс
+import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -47,7 +48,7 @@ public class Barotrauma {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-
+        event.enqueueWork(ModNetworking::register);
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {

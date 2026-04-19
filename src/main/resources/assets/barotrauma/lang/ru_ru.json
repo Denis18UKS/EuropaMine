@@ -3,6 +3,7 @@
     "block.barotrauma.vent_deco_int": "Интерактивная вентиляция",
     "block.barotrauma.navigation_terminal": "Навигационный терминал",
     "item.barotrauma.slot_lock_tool": "Инструмент блокировки слотов",
+    "key.barotrauma.extra_hotbar": "Поменять доп. слот хотбара",
     "message.barotrauma.slot_lock_failed": "Нельзя заблокировать этот слот",
     "creativetab.barotrauma_tab": "Блоки Barotrauma",
     "container.vent": "Приоткрытая вентиляция"

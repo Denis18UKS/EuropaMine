@@ -2,8 +2,8 @@
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
 	"textures": {
-		"0": "crowbar",
-		"particle": "crowbar"
+		"0": "barotrauma:item/crowbar",
+		"particle": "barotrauma:item/crowbar"
 	},
 	"elements": [
 		{

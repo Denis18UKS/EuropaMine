@@ -22,6 +22,11 @@ public class ModBlockGroup {
                         pOutput.accept(ModBlocks.VENT_DECO_INT.get());
                         pOutput.accept(ModBlocks.NAVIGATION_TERMINAL.get());
                         pOutput.accept(ModItems.SLOT_LOCK_TOOL.get());
+                        pOutput.accept(ModItems.WRENCH.get());
+                        pOutput.accept(ModItems.SCREWDIN.get());
+                        pOutput.accept(ModItems.CROWBAR.get());
+                        pOutput.accept(ModItems.OXYGEN_TANK.get());
+                        pOutput.accept(ModItems.WELDING_MACHINE_FUEL_TANK.get());
                     })
                     .build());
 }

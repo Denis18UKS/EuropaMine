@@ -57,6 +57,11 @@ public class Barotrauma {
             event.accept(ModBlocks.VENT_DECO_INT.get());
             event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
             event.accept(ModItems.SLOT_LOCK_TOOL.get());
+            event.accept(ModItems.WRENCH.get());
+            event.accept(ModItems.SCREWDIN.get());
+            event.accept(ModItems.CROWBAR.get());
+            event.accept(ModItems.OXYGEN_TANK.get());
+            event.accept(ModItems.WELDING_MACHINE_FUEL_TANK.get());
         }
     }
 

@@ -1,6 +1,7 @@
 package com.z_mods.barotrauma.client;
 
 import com.z_mods.barotrauma.Barotrauma;
+import com.z_mods.barotrauma.integration.CuriosSlots;
 import com.z_mods.barotrauma.roles.PlayerRoleStorage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -39,38 +40,25 @@ public final class PlayerProfileOverlay {
         int screenWidth = event.getWindow().getGuiScaledWidth();
         int screenHeight = event.getWindow().getGuiScaledHeight();
 
-        hideVanillaSelectedSlotDuplicate(guiGraphics, minecraft, screenWidth, screenHeight);
-        drawExtraHotbarSlot(guiGraphics, minecraft, screenWidth, screenHeight);
+        drawCuriosHotbarSlot(guiGraphics, minecraft, screenWidth, screenHeight);
         drawProfilePanel(guiGraphics, minecraft, screenWidth, screenHeight, false);
     }
 
-    private static void hideVanillaSelectedSlotDuplicate(GuiGraphics guiGraphics, Minecraft minecraft, int screenWidth, int screenHeight) {
-        if (!ClientExtraHotbarSlot.isSelected()) {
+    private static void drawCuriosHotbarSlot(GuiGraphics guiGraphics, Minecraft minecraft, int screenWidth, int screenHeight) {
+        int slotCount = CuriosSlots.getGearSlotCount(minecraft.player);
+        if (slotCount <= 0) {
             return;
         }
 
-        int selected = minecraft.player.getInventory().selected;
-        int vanillaHotbarLeft = screenWidth / 2 - 91;
-        int slotX = vanillaHotbarLeft + selected * 20;
-        int slotY = screenHeight - 22;
+        CuriosHotbarState.clampSelectedGearIndex(slotCount);
 
-        guiGraphics.blit(WIDGETS, slotX, slotY, 0, 0, 22, 22);
-        guiGraphics.blit(WIDGETS, slotX - 1, slotY - 1, 0, 22, 24, 24);
-    }
-
-    private static void drawExtraHotbarSlot(GuiGraphics guiGraphics, Minecraft minecraft, int screenWidth, int screenHeight) {
         int vanillaHotbarLeft = screenWidth / 2 - 91;
         int x = vanillaHotbarLeft + 182;
         int y = screenHeight - 22;
 
         guiGraphics.blit(WIDGETS, x, y, 0, 0, 22, 22);
-        if (ClientExtraHotbarSlot.isSelected()) {
-            guiGraphics.blit(WIDGETS, x - 1, y - 1, 0, 22, 24, 24);
-        }
 
-        ItemStack stack = ClientExtraHotbarSlot.isSelected()
-                ? minecraft.player.getInventory().getSelected()
-                : ClientExtraHotbarSlot.get();
+        ItemStack stack = CuriosSlots.getGearStack(minecraft.player, CuriosHotbarState.getSelectedGearIndex());
         if (!stack.isEmpty()) {
             guiGraphics.renderItem(stack, x + 3, y + 3);
             guiGraphics.renderItemDecorations(minecraft.font, stack, x + 3, y + 3);
@@ -81,6 +69,7 @@ public final class PlayerProfileOverlay {
         int x = getPanelX(screenWidth);
         int y = getPanelY(screenHeight);
         float scale = HudSettings.getScale();
+        java.util.List<ItemStack> curiosStacks = CuriosSlots.getGearStacks(minecraft.player, CuriosSlots.PANEL_SLOT_COUNT);
 
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(x, y, 0.0F);
@@ -91,7 +80,13 @@ public final class PlayerProfileOverlay {
 
         int slotY = 28;
         for (int slot = 0; slot < 6; slot++) {
-            drawSlotFrame(guiGraphics, 12 + slot * 24, slotY, 0xFF2D3D39);
+            int slotX = 12 + slot * 24;
+            drawSlotFrame(guiGraphics, slotX, slotY, 0xFF2D3D39);
+            ItemStack stack = curiosStacks.get(slot);
+            if (!stack.isEmpty()) {
+                guiGraphics.renderItem(stack, slotX, slotY);
+                guiGraphics.renderItemDecorations(minecraft.font, stack, slotX, slotY);
+            }
         }
 
         int headX = PANEL_WIDTH - 48;

@@ -20,15 +20,10 @@ public final class ModNetworking {
 
     public static void register() {
         int id = 0;
-        CHANNEL.messageBuilder(ServerboundSwapExtraHotbarPacket.class, id++)
-                .encoder(ServerboundSwapExtraHotbarPacket::encode)
-                .decoder(ServerboundSwapExtraHotbarPacket::decode)
-                .consumerMainThread(ServerboundSwapExtraHotbarPacket::handle)
-                .add();
-        CHANNEL.messageBuilder(ClientboundExtraHotbarSyncPacket.class, id)
-                .encoder(ClientboundExtraHotbarSyncPacket::encode)
-                .decoder(ClientboundExtraHotbarSyncPacket::decode)
-                .consumerMainThread(ClientboundExtraHotbarSyncPacket::handle)
+        CHANNEL.messageBuilder(ServerboundSwapCurioHotbarPacket.class, id)
+                .encoder(ServerboundSwapCurioHotbarPacket::encode)
+                .decoder(ServerboundSwapCurioHotbarPacket::decode)
+                .consumerMainThread(ServerboundSwapCurioHotbarPacket::handle)
                 .add();
     }
 }

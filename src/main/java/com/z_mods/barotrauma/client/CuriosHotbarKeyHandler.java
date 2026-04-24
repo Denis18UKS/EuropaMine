@@ -2,7 +2,6 @@ package com.z_mods.barotrauma.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.z_mods.barotrauma.Barotrauma;
-import com.z_mods.barotrauma.integration.CuriosSlots;
 import com.z_mods.barotrauma.network.ModNetworking;
 import com.z_mods.barotrauma.network.ServerboundSwapCurioHotbarPacket;
 import net.minecraft.client.KeyMapping;
@@ -17,6 +16,9 @@ import org.lwjgl.glfw.GLFW;
 
 @Mod.EventBusSubscriber(modid = Barotrauma.MOD_ID, value = Dist.CLIENT)
 public final class CuriosHotbarKeyHandler {
+    private static final int LAST_VANILLA_HOTBAR_SLOT = 8;
+    private static boolean extraHotbarActive;
+
     private static final KeyMapping CURIOS_HOTBAR_KEY = new KeyMapping(
             "key.barotrauma.extra_hotbar",
             InputConstants.Type.KEYSYM,
@@ -49,33 +51,38 @@ public final class CuriosHotbarKeyHandler {
             return;
         }
 
-        while (CURIOS_HOTBAR_KEY.consumeClick()) {
-            int slotCount = CuriosSlots.getGearSlotCount(minecraft.player);
-            if (slotCount <= 0) {
-                return;
-            }
+        if (extraHotbarActive && minecraft.player.getInventory().selected != LAST_VANILLA_HOTBAR_SLOT) {
+            ModNetworking.CHANNEL.sendToServer(new ServerboundSwapCurioHotbarPacket(LAST_VANILLA_HOTBAR_SLOT));
+            extraHotbarActive = false;
+        }
 
-            CuriosHotbarState.clampSelectedGearIndex(slotCount);
-            ModNetworking.CHANNEL.sendToServer(new ServerboundSwapCurioHotbarPacket(
-                    minecraft.player.getInventory().selected,
-                    CuriosHotbarState.getSelectedGearIndex()
-            ));
+        while (CURIOS_HOTBAR_KEY.consumeClick()) {
+            minecraft.player.getInventory().selected = LAST_VANILLA_HOTBAR_SLOT;
+            ModNetworking.CHANNEL.sendToServer(new ServerboundSwapCurioHotbarPacket(LAST_VANILLA_HOTBAR_SLOT));
+            extraHotbarActive = !extraHotbarActive;
         }
     }
 
     @SubscribeEvent
     public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.screen != null || !CURIOS_HOTBAR_KEY.isDown()) {
+        if (minecraft.player == null || minecraft.screen != null || event.getScrollDelta() == 0.0D) {
             return;
         }
 
-        int slotCount = CuriosSlots.getGearSlotCount(minecraft.player);
-        if (slotCount <= 0) {
+        int selected = minecraft.player.getInventory().selected;
+        if (extraHotbarActive) {
+            ModNetworking.CHANNEL.sendToServer(new ServerboundSwapCurioHotbarPacket(LAST_VANILLA_HOTBAR_SLOT));
+            minecraft.player.getInventory().selected = event.getScrollDelta() < 0.0D ? 0 : LAST_VANILLA_HOTBAR_SLOT;
+            extraHotbarActive = false;
+            event.setCanceled(true);
             return;
         }
 
-        CuriosHotbarState.cycleSelectedGearIndex(event.getScrollDelta(), slotCount);
-        event.setCanceled(true);
+        if (selected == LAST_VANILLA_HOTBAR_SLOT && event.getScrollDelta() < 0.0D) {
+            ModNetworking.CHANNEL.sendToServer(new ServerboundSwapCurioHotbarPacket(LAST_VANILLA_HOTBAR_SLOT));
+            extraHotbarActive = true;
+            event.setCanceled(true);
+        }
     }
 }

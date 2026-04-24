@@ -7,14 +7,13 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-public record ServerboundSwapCurioHotbarPacket(int selectedHotbarSlot, int curioIndex) {
+public record ServerboundSwapCurioHotbarPacket(int selectedHotbarSlot) {
     public static void encode(ServerboundSwapCurioHotbarPacket packet, FriendlyByteBuf buffer) {
         buffer.writeVarInt(packet.selectedHotbarSlot);
-        buffer.writeVarInt(packet.curioIndex);
     }
 
     public static ServerboundSwapCurioHotbarPacket decode(FriendlyByteBuf buffer) {
-        return new ServerboundSwapCurioHotbarPacket(buffer.readVarInt(), buffer.readVarInt());
+        return new ServerboundSwapCurioHotbarPacket(buffer.readVarInt());
     }
 
     public static void handle(ServerboundSwapCurioHotbarPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
@@ -24,7 +23,7 @@ public record ServerboundSwapCurioHotbarPacket(int selectedHotbarSlot, int curio
             return;
         }
 
-        context.enqueueWork(() -> CuriosSlots.swapWithHotbar(player, packet.curioIndex(), packet.selectedHotbarSlot()));
+        context.enqueueWork(() -> CuriosSlots.swapExtraHotbarWithHotbar(player, packet.selectedHotbarSlot()));
         context.setPacketHandled(true);
     }
 }

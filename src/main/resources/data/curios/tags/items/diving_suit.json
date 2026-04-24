@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "barotrauma:diving_suit",
+      "required": false
+    }
+  ]
+}

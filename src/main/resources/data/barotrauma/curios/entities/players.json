@@ -3,6 +3,10 @@
     "minecraft:player"
   ],
   "slots": [
-    "gear"
+    "diving_suit",
+    "badge",
+    "headset",
+    "tool_belt",
+    "extra_hotbar"
   ]
 }

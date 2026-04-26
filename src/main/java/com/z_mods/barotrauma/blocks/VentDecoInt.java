@@ -2,7 +2,6 @@ package com.z_mods.barotrauma.blocks;
 
 import com.z_mods.barotrauma.init.ModBlockEntities;
 import com.z_mods.barotrauma.menu.VentMenu;
-import com.z_mods.barotrauma.roles.PlayerRoleStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -119,7 +118,6 @@ public class VentDecoInt extends BaseEntityBlock {
                                 Player player, InteractionHand hand, BlockHitResult hit) {
 
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
-
             level.playSound(
                 null,
                 pos,
@@ -135,11 +133,7 @@ public class VentDecoInt extends BaseEntityBlock {
                     (id, inventory, p) -> new VentMenu(id, inventory, pos),
                     CONTAINER_TITLE
                 ),
-                buf -> {
-                    String roleId = PlayerRoleStorage.getRoleId(serverPlayer);
-                    buf.writeBlockPos(pos);
-                    buf.writeUtf(roleId == null ? "" : roleId);
-                }
+                buf -> buf.writeBlockPos(pos)
             );
         }
 

@@ -3,8 +3,8 @@
 	"credit": "Made with Blockbench",
 	"texture_size": [64, 64],
 	"textures": {
-		"0": "submarine_door",
-		"particle": "submarine_door_with_glass"
+		"0": "barotrauma:block/submarine_door",
+		"particle": "barotrauma:block/submarine_door_with_glass"
 	},
 	"elements": [
 		{

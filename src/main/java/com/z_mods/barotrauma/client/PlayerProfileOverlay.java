@@ -1,12 +1,10 @@
 package com.z_mods.barotrauma.client;
 
 import com.z_mods.barotrauma.Barotrauma;
-import com.z_mods.barotrauma.integration.CuriosSlots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
@@ -37,22 +35,22 @@ public final class PlayerProfileOverlay {
         int screenWidth = event.getWindow().getGuiScaledWidth();
         int screenHeight = event.getWindow().getGuiScaledHeight();
 
-        drawCuriosHotbarSlot(guiGraphics, minecraft, screenWidth, screenHeight);
+        drawLayoutSlots(guiGraphics, minecraft);
         drawProfilePanel(guiGraphics, minecraft, screenWidth, screenHeight, false);
     }
 
-    private static void drawCuriosHotbarSlot(GuiGraphics guiGraphics, Minecraft minecraft, int screenWidth, int screenHeight) {
-        int vanillaHotbarLeft = screenWidth / 2 - 91;
-        int x = vanillaHotbarLeft + 182;
-        int y = screenHeight - 22;
-
-        guiGraphics.blit(WIDGETS, x, y, 0, 0, 22, 22);
-
-        ItemStack stack = CuriosSlots.getFirstStack(minecraft.player, CuriosSlots.EXTRA_HOTBAR_SLOT);
-        if (!stack.isEmpty()) {
-            guiGraphics.renderItem(stack, x + 3, y + 3);
-            guiGraphics.renderItemDecorations(minecraft.font, stack, x + 3, y + 3);
+    public static void drawLayoutSlots(GuiGraphics guiGraphics, Minecraft minecraft) {
+        for (SlotLayoutSettings.SlotEntry slot : SlotLayoutSettings.getSlots()) {
+            drawSlot(guiGraphics, minecraft, slot, false);
         }
+    }
+
+    public static void drawSlot(GuiGraphics guiGraphics, Minecraft minecraft, SlotLayoutSettings.SlotEntry slot, boolean selected) {
+        int x = slot.getX();
+        int y = slot.getY();
+        guiGraphics.blit(WIDGETS, x, y, 0, 0, SlotLayoutSettings.SLOT_SIZE, SlotLayoutSettings.SLOT_SIZE);
+        guiGraphics.fill(x + 3, y + 3, x + 19, y + 19, selected ? 0x66D0F0FF : 0x33000000);
+        guiGraphics.drawCenteredString(minecraft.font, slot.getType().getLabel(), x + 11, y + 25, selected ? 0xFFB7F7FF : 0xFFE6E6E6);
     }
 
     public static void drawProfilePanel(GuiGraphics guiGraphics, Minecraft minecraft, int screenWidth, int screenHeight, boolean editMode) {

@@ -3,7 +3,6 @@ package com.z_mods.barotrauma.menu;
 import com.z_mods.barotrauma.blocks.VentDecoIntEntity;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModMenus;
-import com.z_mods.barotrauma.roles.PlayerRoleStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -25,17 +24,11 @@ public class VentMenu extends AbstractContainerMenu {
 
     private final VentDecoIntEntity blockEntity;
     private final Level level;
-    private final String playerRoleId;
     private int lockedSlots;
 
     public VentMenu(int id, Inventory playerInventory, BlockPos pos) {
-        this(id, playerInventory, pos, PlayerRoleStorage.getRoleId(playerInventory.player));
-    }
-
-    public VentMenu(int id, Inventory playerInventory, BlockPos pos, String playerRoleId) {
         super(ModMenus.VENT_MENU.get(), id);
         this.level = playerInventory.player.level();
-        this.playerRoleId = playerRoleId;
         BlockEntity entity = level.getBlockEntity(pos);
 
         if (entity instanceof VentDecoIntEntity ventEntity) {
@@ -135,10 +128,6 @@ public class VentMenu extends AbstractContainerMenu {
 
     public boolean isSlotLocked(int slot) {
         return slot >= 0 && slot < VENT_SLOT_COUNT && (lockedSlots & (1 << slot)) != 0;
-    }
-
-    public String getPlayerRoleId() {
-        return playerRoleId;
     }
 
     private class VentSlot extends Slot {

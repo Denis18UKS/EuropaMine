@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "barotrauma:block/beds" },
+    "facing=south": { "model": "barotrauma:block/beds", "y": 180 },
+    "facing=west": { "model": "barotrauma:block/beds", "y": 270 },
+    "facing=east": { "model": "barotrauma:block/beds", "y": 90 }
+  }
+}

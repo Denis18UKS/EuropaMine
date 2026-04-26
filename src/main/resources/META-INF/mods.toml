@@ -9,9 +9,6 @@ displayName="${mod_name}"
 authors="${mod_authors}"
 description='''${mod_description}'''
 
-[[mixins]]
-config="${mod_id}.mixins.json"
-
 [[dependencies.${mod_id}]]
     modId="forge"
     mandatory=true
@@ -24,11 +21,4 @@ config="${mod_id}.mixins.json"
     mandatory=true
     versionRange="${minecraft_version_range}"
     ordering="NONE"
-    side="BOTH"
-
-[[dependencies.${mod_id}]]
-    modId="curios"
-    mandatory=true
-    versionRange="[5.12.1,)"
-    ordering="AFTER"
     side="BOTH"

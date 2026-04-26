@@ -4,7 +4,6 @@ plugins {
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
-    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = mod_version
@@ -40,6 +39,8 @@ minecraft {
 
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             property 'forge.enabledGameTestNamespaces', mod_id
+            args '--username', 'Zunserz'
+            args '--uuid', 'af3be95b-e254-4231-990a-407fd121c1fe'
 
             mods {
                 "${mod_id}" {
@@ -69,10 +70,6 @@ minecraft {
 // Добавляем репозиторий GeckoLib
 repositories {
     maven {
-        name = 'Local Curios Repo'
-        url = uri("${projectDir}/local-maven")
-    }
-    maven {
         name = 'GeckoLib'
         url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
         content {
@@ -80,15 +77,6 @@ repositories {
             includeGroup 'com.eliotlash.mclib'
         }
     }
-    maven {
-        name = 'Illusive Soulworks maven'
-        url 'https://maven.theillusivec4.top/'
-    }
-}
-
-mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
-    config "${mod_id}.mixins.json"
 }
 
 dependencies {
@@ -98,8 +86,6 @@ dependencies {
     // Добавляем GeckoLib
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}")
     implementation("com.eliotlash.mclib:mclib:20")
-    compileOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}:api")
-    runtimeOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

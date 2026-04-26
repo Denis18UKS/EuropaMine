@@ -17,7 +17,6 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraft.client.gui.screens.MenuScreens; // ЭТО ПРАВИЛЬНО - КЛАСС MINECRAFT
@@ -40,14 +39,9 @@ public class Barotrauma {
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModMenus.MENUS.register(modEventBus); // Регистрируем меню
 
-        modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::addCreative);
 
         MinecraftForge.EVENT_BUS.register(this);
-    }
-
-    private void commonSetup(final FMLCommonSetupEvent event) {
-        event.enqueueWork(com.z_mods.barotrauma.network.ModNetworking::register);
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
@@ -55,7 +49,19 @@ public class Barotrauma {
             event.accept(ModBlocks.VENT_DECO.get());
             event.accept(ModBlocks.VENT_DECO_INT.get());
             event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
+            event.accept(ModBlocks.BEDS.get());
+            event.accept(ModBlocks.JUNCTION_BOX.get());
+            event.accept(ModBlocks.SUBMARINE_BUTTON_BLOCK.get());
+            event.accept(ModBlocks.SUBMARINE_DOOR.get());
+            event.accept(ModBlocks.SUBMARINE_LEVER.get());
+            event.accept(ModBlocks.SUBMARINE_TRAPDOOR.get());
+        }
+
+        if (event.getTab() == ModBlockGroup.BAROTRAUMA_TOOLS_TAB.get()) {
+            event.accept(ModItems.NAMETAG.get());
+            event.accept(ModItems.ACCESS_CONFIGURATOR.get());
             event.accept(ModItems.SLOT_LOCK_TOOL.get());
+            event.accept(ModItems.GARNITURE.get());
             event.accept(ModItems.WRENCH.get());
             event.accept(ModItems.SCREWDIN.get());
             event.accept(ModItems.CROWBAR.get());

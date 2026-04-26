@@ -1,6 +1,10 @@
 package com.z_mods.barotrauma.init;
 
 import com.z_mods.barotrauma.Barotrauma;
+import com.z_mods.barotrauma.item.AccessConfiguratorItem;
+import com.z_mods.barotrauma.item.AccessNameTagItem;
+import com.z_mods.barotrauma.item.GarnitureHelmetItem;
+import net.minecraft.world.item.ArmorMaterials;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -12,6 +16,15 @@ public class ModItems {
 
     public static final RegistryObject<Item> SLOT_LOCK_TOOL = ITEMS.register("slot_lock_tool",
             () -> new Item(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> ACCESS_CONFIGURATOR = ITEMS.register("access_configurator",
+            () -> new AccessConfiguratorItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> NAMETAG = ITEMS.register("nametag",
+            () -> new AccessNameTagItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> GARNITURE = ITEMS.register("garniture",
+            () -> new GarnitureHelmetItem(ArmorMaterials.LEATHER, new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> WRENCH = ITEMS.register("wrench",
             () -> new Item(new Item.Properties().stacksTo(1)));

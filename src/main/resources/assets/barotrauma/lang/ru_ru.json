@@ -32,5 +32,7 @@
     "access.barotrauma.engineer": "\u0418\u043d\u0436\u0435\u043d\u0435\u0440",
     "creativetab.barotrauma_tab": "\u0411\u043b\u043e\u043a\u0438 Barotrauma",
     "creativetab.barotrauma_tools_tab": "\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u044b Barotrauma",
+    "key.categories.barotrauma": "Barotrauma",
+    "key.barotrauma.structure_configurator": "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u0449\u0438\u043a \u0441\u0442\u0440\u0443\u043a\u0442\u0443\u0440",
     "container.vent": "\u041f\u0440\u0438\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0446\u0438\u044f"
 }

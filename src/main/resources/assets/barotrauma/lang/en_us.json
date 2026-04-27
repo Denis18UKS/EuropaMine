@@ -32,5 +32,7 @@
     "access.barotrauma.engineer": "Engineer",
     "creativetab.barotrauma_tab": "Barotrauma Blocks",
     "creativetab.barotrauma_tools_tab": "Barotrauma Tools",
+    "key.categories.barotrauma": "Barotrauma",
+    "key.barotrauma.structure_configurator": "Open Structure Configurator",
     "container.vent": "Half-Opened Vent"
 }

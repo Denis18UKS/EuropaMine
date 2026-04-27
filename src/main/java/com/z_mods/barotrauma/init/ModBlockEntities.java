@@ -3,6 +3,7 @@ package com.z_mods.barotrauma.init;
 import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.blocks.VentDecoEntity;
 import com.z_mods.barotrauma.blocks.VentDecoIntEntity;
+import com.z_mods.barotrauma.blocks.StructureConfigBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -19,4 +20,14 @@ public class ModBlockEntities {
     public static final RegistryObject<BlockEntityType<VentDecoIntEntity>> VENT_DECO_INT = 
         BLOCK_ENTITIES.register("vent_deco_int",
             () -> BlockEntityType.Builder.of(VentDecoIntEntity::new, ModBlocks.VENT_DECO_INT.get()).build(null));
+
+    public static final RegistryObject<BlockEntityType<StructureConfigBlockEntity>> STRUCTURE_CONFIG =
+        BLOCK_ENTITIES.register("structure_config",
+            () -> BlockEntityType.Builder.of(StructureConfigBlockEntity::new,
+                    ModBlocks.BEDS.get(),
+                    ModBlocks.JUNCTION_BOX.get(),
+                    ModBlocks.SUBMARINE_BUTTON_BLOCK.get(),
+                    ModBlocks.SUBMARINE_DOOR.get(),
+                    ModBlocks.SUBMARINE_LEVER.get(),
+                    ModBlocks.SUBMARINE_TRAPDOOR.get()).build(null));
 }

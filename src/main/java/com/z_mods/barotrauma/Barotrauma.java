@@ -6,6 +6,7 @@ import com.z_mods.barotrauma.init.ModBlockGroup;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModBlockEntities;
 import com.z_mods.barotrauma.init.ModMenus; // ВАШ класс
+import com.z_mods.barotrauma.blocks.StructureConfigBlockRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import com.z_mods.barotrauma.client.VentScreen; // ВАШ класс
@@ -94,6 +95,11 @@ public class Barotrauma {
                 );
                 
                 // Регистрируем экран для меню
+                BlockEntityRenderers.register(
+                    ModBlockEntities.STRUCTURE_CONFIG.get(),
+                    context -> new StructureConfigBlockRenderer()
+                );
+
                 MenuScreens.register(ModMenus.VENT_MENU.get(), VentScreen::new);
             });
         }

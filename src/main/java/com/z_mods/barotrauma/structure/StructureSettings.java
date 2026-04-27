@@ -16,6 +16,15 @@ public final class StructureSettings {
 
     public static Config read(ItemStack stack) {
         CompoundTag tag = stack.getTagElement(TAG);
+        return readContainer(tag);
+    }
+
+    public static Config read(CompoundTag container) {
+        CompoundTag tag = container == null ? null : container.getCompound(TAG);
+        return readContainer(tag);
+    }
+
+    private static Config readContainer(CompoundTag tag) {
         if (tag == null) {
             return new Config(Kind.PLATFORM, WallType.INTERNAL, false, false, 100.0F);
         }
@@ -31,6 +40,16 @@ public final class StructureSettings {
 
     public static void write(ItemStack stack, Config config) {
         CompoundTag tag = stack.getOrCreateTagElement(TAG);
+        writeContainer(tag, config);
+    }
+
+    public static void write(CompoundTag container, Config config) {
+        CompoundTag tag = new CompoundTag();
+        writeContainer(tag, config);
+        container.put(TAG, tag);
+    }
+
+    private static void writeContainer(CompoundTag tag, Config config) {
         tag.putString(KIND_KEY, config.kind().id);
         tag.putString(WALL_TYPE_KEY, config.wallType().id);
         tag.putBoolean(UNBREAKABLE_KEY, config.unbreakable());

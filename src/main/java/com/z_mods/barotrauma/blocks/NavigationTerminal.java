@@ -16,10 +16,10 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class NavigationTerminal extends HorizontalDirectionalBlock {
-    private static final VoxelShape SHAPE_NORTH = Shapes.box(0.0, 0.25, 0.5, 1.0, 1.0, 1.0);
-    private static final VoxelShape SHAPE_SOUTH = Shapes.box(0.0, 0.25, 0.0, 1.0, 1.0, 0.5);
-    private static final VoxelShape SHAPE_WEST = Shapes.box(0.5, 0.25, 0.0, 1.0, 1.0, 1.0);
-    private static final VoxelShape SHAPE_EAST = Shapes.box(0.0, 0.25, 0.0, 0.5, 1.0, 1.0);
+    private static final VoxelShape SHAPE_NORTH = Shapes.box(-1.0, 0.125, 0.3125, 2.0, 2.0, 1.0);
+    private static final VoxelShape SHAPE_SOUTH = Shapes.box(-1.0, 0.125, 0.0, 2.0, 2.0, 0.6875);
+    private static final VoxelShape SHAPE_WEST = Shapes.box(0.3125, 0.125, -1.0, 1.0, 2.0, 2.0);
+    private static final VoxelShape SHAPE_EAST = Shapes.box(0.0, 0.125, -1.0, 0.6875, 2.0, 2.0);
 
     public NavigationTerminal() {
         super(Properties.of()

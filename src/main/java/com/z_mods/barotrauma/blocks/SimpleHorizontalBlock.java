@@ -35,6 +35,10 @@ public class SimpleHorizontalBlock extends HorizontalDirectionalBlock implements
     private final VoxelShape shapeSouth;
     private final VoxelShape shapeWest;
     private final VoxelShape shapeEast;
+    private final VoxelShape openShapeNorth;
+    private final VoxelShape openShapeSouth;
+    private final VoxelShape openShapeWest;
+    private final VoxelShape openShapeEast;
 
     public SimpleHorizontalBlock() {
         this(Shapes.block());
@@ -53,6 +57,10 @@ public class SimpleHorizontalBlock extends HorizontalDirectionalBlock implements
         this.shapeSouth = rotate(shapeNorth, Direction.SOUTH);
         this.shapeWest = rotate(shapeNorth, Direction.WEST);
         this.shapeEast = rotate(shapeNorth, Direction.EAST);
+        this.openShapeNorth = move(shapeNorth, 0.0D, 30.0D / 16.0D, 0.0D);
+        this.openShapeSouth = rotate(this.openShapeNorth, Direction.SOUTH);
+        this.openShapeWest = rotate(this.openShapeNorth, Direction.WEST);
+        this.openShapeEast = rotate(this.openShapeNorth, Direction.EAST);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
 
@@ -68,11 +76,25 @@ public class SimpleHorizontalBlock extends HorizontalDirectionalBlock implements
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        if (isOpenDoor(level, pos)) {
+            return openShapeFor(state.getValue(FACING));
+        }
         return shapeFor(state.getValue(FACING));
     }
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        if (isOpenDoor(level, pos)) {
+            return openShapeFor(state.getValue(FACING));
+        }
+        return shapeFor(state.getValue(FACING));
+    }
+
+    @Override
+    public VoxelShape getInteractionShape(BlockState state, BlockGetter level, BlockPos pos) {
+        if (isOpenDoor(level, pos)) {
+            return openShapeFor(state.getValue(FACING));
+        }
         return shapeFor(state.getValue(FACING));
     }
 
@@ -120,6 +142,9 @@ public class SimpleHorizontalBlock extends HorizontalDirectionalBlock implements
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        if (this == ModBlocks.SUBMARINE_DOOR.get() || this == ModBlocks.SUBMARINE_BUTTON_BLOCK.get()) {
+            return new AnimatedStructureConfigBlockEntity(pos, state);
+        }
         return new StructureConfigBlockEntity(pos, state);
     }
 
@@ -130,6 +155,21 @@ public class SimpleHorizontalBlock extends HorizontalDirectionalBlock implements
             case EAST -> this.shapeEast;
             default -> this.shapeNorth;
         };
+    }
+
+    private VoxelShape openShapeFor(Direction direction) {
+        return switch (direction) {
+            case SOUTH -> this.openShapeSouth;
+            case WEST -> this.openShapeWest;
+            case EAST -> this.openShapeEast;
+            default -> this.openShapeNorth;
+        };
+    }
+
+    private boolean isOpenDoor(BlockGetter level, BlockPos pos) {
+        return this == ModBlocks.SUBMARINE_DOOR.get()
+                && level.getBlockEntity(pos) instanceof StructureConfigBlockEntity blockEntity
+                && blockEntity.isDoorOpen();
     }
 
     private static VoxelShape rotate(VoxelShape shape, Direction direction) {
@@ -144,6 +184,16 @@ public class SimpleHorizontalBlock extends HorizontalDirectionalBlock implements
                         1.0D - box.minZ, box.maxY, box.maxX);
                 default -> Shapes.box(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
             });
+        }
+        return result.optimize();
+    }
+
+    private static VoxelShape move(VoxelShape shape, double x, double y, double z) {
+        VoxelShape result = Shapes.empty();
+        for (var box : shape.toAabbs()) {
+            result = Shapes.or(result, Shapes.box(
+                    box.minX + x, box.minY + y, box.minZ + z,
+                    box.maxX + x, box.maxY + y, box.maxZ + z));
         }
         return result.optimize();
     }

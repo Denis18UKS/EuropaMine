@@ -96,7 +96,7 @@ public class Barotrauma {
                 
                 // Регистрируем экран для меню
                 BlockEntityRenderers.register(
-                    ModBlockEntities.STRUCTURE_CONFIG.get(),
+                    ModBlockEntities.ANIMATED_STRUCTURE_CONFIG.get(),
                     context -> new StructureConfigBlockRenderer()
                 );
 

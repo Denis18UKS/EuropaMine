@@ -1,6 +1,7 @@
 package com.z_mods.barotrauma.init;
 
 import com.z_mods.barotrauma.Barotrauma;
+import com.z_mods.barotrauma.blocks.AnimatedStructureConfigBlockEntity;
 import com.z_mods.barotrauma.blocks.VentDecoEntity;
 import com.z_mods.barotrauma.blocks.VentDecoIntEntity;
 import com.z_mods.barotrauma.blocks.StructureConfigBlockEntity;
@@ -26,8 +27,12 @@ public class ModBlockEntities {
             () -> BlockEntityType.Builder.of(StructureConfigBlockEntity::new,
                     ModBlocks.BEDS.get(),
                     ModBlocks.JUNCTION_BOX.get(),
-                    ModBlocks.SUBMARINE_BUTTON_BLOCK.get(),
-                    ModBlocks.SUBMARINE_DOOR.get(),
                     ModBlocks.SUBMARINE_LEVER.get(),
                     ModBlocks.SUBMARINE_TRAPDOOR.get()).build(null));
+
+    public static final RegistryObject<BlockEntityType<AnimatedStructureConfigBlockEntity>> ANIMATED_STRUCTURE_CONFIG =
+        BLOCK_ENTITIES.register("animated_structure_config",
+            () -> BlockEntityType.Builder.of(AnimatedStructureConfigBlockEntity::new,
+                    ModBlocks.SUBMARINE_BUTTON_BLOCK.get(),
+                    ModBlocks.SUBMARINE_DOOR.get()).build(null));
 }

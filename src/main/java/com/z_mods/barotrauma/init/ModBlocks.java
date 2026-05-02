@@ -35,7 +35,7 @@ public class ModBlocks {
     public static final RegistryObject<Block> JUNCTION_BOX = registerBlock("junction_box",
             () -> new SimpleHorizontalBlock(box(1, 0, 14, 15, 20, 16)));
 
-    public static final RegistryObject<Block> SUBMARINE_BUTTON_BLOCK = registerBlock("submarine_button_block",
+    public static final RegistryObject<Block> SUBMARINE_BUTTON_BLOCK = registerBlock("bar_button_block",
             () -> new SimpleHorizontalBlock(box(5, 4, 13.5, 11, 14, 16)));
 
     public static final RegistryObject<Block> SUBMARINE_DOOR = registerBlock("submarine_door",

@@ -9,6 +9,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoBlockEntity;
@@ -25,7 +26,7 @@ public class StructureConfigBlockEntity extends BlockEntity implements GeoBlockE
     private static final String BUTTON_PRESSED_UNTIL_TAG = "ButtonPressedUntil";
     private static final RawAnimation DOOR_OPEN = RawAnimation.begin().thenPlayAndHold("door_open");
     private static final RawAnimation DOOR_CLOSE = RawAnimation.begin().thenPlayAndHold("door_close");
-    private static final RawAnimation BUTTON_CLICK = RawAnimation.begin().thenPlay("submarine_button_click");
+    private static final RawAnimation BUTTON_CLICK = RawAnimation.begin().thenPlay("cb");
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private StructureSettings.Config config = new StructureSettings.Config(
@@ -40,7 +41,11 @@ public class StructureConfigBlockEntity extends BlockEntity implements GeoBlockE
     private long buttonPressedUntil;
 
     public StructureConfigBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.STRUCTURE_CONFIG.get(), pos, state);
+        this(ModBlockEntities.STRUCTURE_CONFIG.get(), pos, state);
+    }
+
+    protected StructureConfigBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+        super(type, pos, state);
     }
 
     public StructureSettings.Config getConfig() {
@@ -119,7 +124,7 @@ public class StructureConfigBlockEntity extends BlockEntity implements GeoBlockE
             if (getBlockState().is(ModBlocks.SUBMARINE_BUTTON_BLOCK.get())) {
                 return isButtonPressed() ? state.setAndContinue(BUTTON_CLICK) : PlayState.STOP;
             }
-            return state.setAndContinue(this.doorOpen ? DOOR_OPEN : DOOR_CLOSE);
+            return this.doorOpen ? state.setAndContinue(DOOR_OPEN) : PlayState.STOP;
         }).triggerableAnim("door_open", DOOR_OPEN)
                 .triggerableAnim("door_close", DOOR_CLOSE)
                 .triggerableAnim("button_click", BUTTON_CLICK));

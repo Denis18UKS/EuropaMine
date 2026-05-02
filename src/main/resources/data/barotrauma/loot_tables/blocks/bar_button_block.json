@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "barotrauma:submarine_button_block"
+          "name": "barotrauma:bar_button_block"
         }
       ],
       "conditions": [

@@ -146,8 +146,10 @@ public final class SettingsPanelRenderer implements BlockEntityRenderer<Settings
         drawText(poses, buffers, "ИГРОК И ЧАТ", 126, -126, WHITE, 108);
         Minecraft minecraft = Minecraft.getInstance();
         String name = minecraft.player == null ? "Игрок" : minecraft.player.getName().getString();
-        if (minecraft.player instanceof AbstractClientPlayer player) {
-            drawHead(poses, buffers, player.getSkinTextureLocation(), 126, -112, 22);
+        if (minecraft.player != null) {
+            drawHead(poses, buffers,
+                    ((AbstractClientPlayer) minecraft.player).getSkinTextureLocation(),
+                    126, -112, 22);
         }
         drawText(poses, buffers, name, 152, -107, TEXT, 80);
         drawText(poses, buffers, "Профессия: Капитан", 126, -84, ACCENT, 108);

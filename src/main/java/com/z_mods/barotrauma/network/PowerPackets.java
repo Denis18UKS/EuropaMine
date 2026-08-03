@@ -123,9 +123,14 @@ public final class PowerPackets {
         }
 
         static ClientboundOpenMachine decode(FriendlyByteBuf buffer) {
+            BlockPos pos = buffer.readBlockPos();
+            String guiId = buffer.readUtf(128);
+            boolean technical = buffer.readBoolean();
             CompoundTag state = buffer.readNbt();
-            return new ClientboundOpenMachine(buffer.readBlockPos(), buffer.readUtf(128), buffer.readBoolean(),
-                    state == null ? new CompoundTag() : state, buffer.readBoolean(), buffer.readVarInt());
+            boolean traitor = buffer.readBoolean();
+            int electronicsSkill = buffer.readVarInt();
+            return new ClientboundOpenMachine(pos, guiId, technical,
+                    state == null ? new CompoundTag() : state, traitor, electronicsSkill);
         }
 
         static void handle(ClientboundOpenMachine packet, Supplier<NetworkEvent.Context> context) {
@@ -208,7 +213,7 @@ public final class PowerPackets {
                 return;
             }
         }
-        data.setChanged();
+        data.setDirty();
         sendState(player, packet.pos);
     }
 
@@ -225,7 +230,8 @@ public final class PowerPackets {
                 state.triggerOverfuel();
                 player.displayClientMessage(Component.literal("ОПАСНОСТЬ: в занятую ячейку загружен второй стержень!"), true);
             } else {
-                player.displayClientMessage(Component.literal("Ячейка занята. ЛКМ извлекает стержень, ПКМ запускает аварийную перегрузку."), true);
+                player.displayClientMessage(Component.literal(
+                        "Ячейка занята. ЛКМ извлекает стержень, ПКМ запускает аварийную перегрузку."), true);
             }
             return;
         }

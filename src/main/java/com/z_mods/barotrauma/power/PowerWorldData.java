@@ -65,13 +65,13 @@ public final class PowerWorldData extends SavedData {
         } else {
             machines.remove(pos.asLong());
         }
-        setChanged();
+        setDirty();
     }
 
     public boolean unbind(BlockPos pos) {
         boolean changed = bindings.remove(pos.asLong()) != null;
         changed |= machines.remove(pos.asLong()) != null;
-        if (changed) setChanged();
+        if (changed) setDirty();
         return changed;
     }
 
@@ -79,7 +79,7 @@ public final class PowerWorldData extends SavedData {
         if (first.equals(second)) return false;
         WireConnection connection = WireConnection.normalized(first.asLong(), second.asLong(), color);
         boolean changed = wires.add(connection);
-        if (changed) setChanged();
+        if (changed) setDirty();
         return changed;
     }
 
@@ -88,7 +88,7 @@ public final class PowerWorldData extends SavedData {
         int before = wires.size();
         wires.removeIf(connection -> connection.a == key || connection.b == key);
         int removed = before - wires.size();
-        if (removed > 0) setChanged();
+        if (removed > 0) setDirty();
         return removed;
     }
 
@@ -144,7 +144,7 @@ public final class PowerWorldData extends SavedData {
                 if (state.tickReactor(requested)) {
                     warnReactor(level, pos, state);
                     if (state.shouldExplode()) {
-                        explodeReactor(level, pos, state);
+                        explodeReactor(level, pos);
                         exploded.add(entry.getKey());
                     }
                 }
@@ -155,9 +155,9 @@ public final class PowerWorldData extends SavedData {
                 MachineState state = machines.get(key);
                 if (state != null) state.resetAfterExplosion();
             }
-            setChanged();
+            setDirty();
         } else if (ticks % 20L == 0L) {
-            setChanged();
+            setDirty();
         }
     }
 
@@ -180,12 +180,12 @@ public final class PowerWorldData extends SavedData {
                     4, 0.28D, 0.2D, 0.28D, 0.015D);
         }
         if (ticks % 30L == 0L) {
-            level.playSound(null, pos, SoundEvents.NOTE_BLOCK_BELL.get(), SoundSource.BLOCKS,
+            level.playSound(null, pos, SoundEvents.NOTE_BLOCK_BELL, SoundSource.BLOCKS,
                     1.4F, state.overfuelCountdown > 0 ? 0.55F : 0.8F);
         }
     }
 
-    private void explodeReactor(ServerLevel level, BlockPos pos, MachineState state) {
+    private void explodeReactor(ServerLevel level, BlockPos pos) {
         level.sendParticles(ParticleTypes.FLAME,
                 pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D,
                 80, 1.2D, 0.8D, 1.2D, 0.08D);
@@ -276,7 +276,8 @@ public final class PowerWorldData extends SavedData {
 
     private record WireConnection(long a, long b, WireColor color) {
         static WireConnection normalized(long first, long second, WireColor color) {
-            return first <= second ? new WireConnection(first, second, color) : new WireConnection(second, first, color);
+            return first <= second ? new WireConnection(first, second, color)
+                    : new WireConnection(second, first, color);
         }
     }
 
@@ -389,7 +390,8 @@ public final class PowerWorldData extends SavedData {
         private boolean tickReactor(double requestedLoad) {
             boolean changed = false;
             if (automatic && enabled) {
-                int automaticTarget = requestedLoad <= 0.0D ? 8 : Mth.clamp((int) Math.ceil(requestedLoad / 30.0D), 5, 100);
+                int automaticTarget = requestedLoad <= 0.0D
+                        ? 8 : Mth.clamp((int) Math.ceil(requestedLoad / 30.0D), 5, 100);
                 if (target != automaticTarget) {
                     target += Integer.compare(automaticTarget, target);
                     changed = true;
@@ -482,7 +484,9 @@ public final class PowerWorldData extends SavedData {
             state.load = tag.getDouble("Load");
             state.temperature = tag.contains("Temperature") ? tag.getDouble("Temperature") : 18.0D;
             state.burnAccumulator = tag.getDouble("BurnAccumulator");
-            for (int i = 0; i < state.fuel.length; i++) state.fuel[i] = Mth.clamp(tag.getInt("Fuel" + i), 0, MAX_FUEL);
+            for (int i = 0; i < state.fuel.length; i++) {
+                state.fuel[i] = Mth.clamp(tag.getInt("Fuel" + i), 0, MAX_FUEL);
+            }
             state.overfuelCountdown = tag.getInt("Overfuel");
             state.meltdownCountdown = tag.getInt("Meltdown");
             state.health = tag.contains("Health") ? Mth.clamp(tag.getInt("Health"), 0, 100) : 100;

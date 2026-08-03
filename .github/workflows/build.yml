@@ -21,16 +21,11 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Развернуть точные GUI-ресурсы
+      - name: Развернуть исправленный GUI-код
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p src/main/java/com/z_mods/barotrauma/client
-          mkdir -p src/main/resources/assets/barotrauma/textures/gui
           cat .gui-assets/PowerScreens.part* | base64 --decode > src/main/java/com/z_mods/barotrauma/client/PowerScreens.java
-          cat .gui-assets/reactor.part* | base64 --decode > src/main/resources/assets/barotrauma/textures/gui/reactor_exact.png
-          cat .gui-assets/tech.part* | base64 --decode > src/main/resources/assets/barotrauma/textures/gui/electrical_technical_exact.png
-          cat .gui-assets/maint.part* | base64 --decode > src/main/resources/assets/barotrauma/textures/gui/electrical_maintenance_exact.png
 
       - name: Разрешить запуск Gradle
         run: chmod +x gradlew

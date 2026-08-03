@@ -20,6 +20,7 @@ public final class PanelNetworkSync {
         PanelSettings settings = PanelSettingsSavedData.get(player.server).getSettings();
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new PanelPackets.ClientboundOpenPanel(settings.toTag(), canEdit(player)));
+        syncChat(player);
         syncPhotos(player);
     }
 
@@ -29,6 +30,7 @@ public final class PanelNetworkSync {
         PanelSettings settings = PanelSettingsSavedData.get(player.server).getSettings();
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new PanelPackets.ClientboundSettings(settings.toTag()));
+        syncChat(player);
         syncPhotos(player);
     }
 
@@ -59,6 +61,22 @@ public final class PanelNetworkSync {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new PanelPackets.ClientboundPhoto(slot, bytes == null ? new byte[0] : bytes));
+        }
+    }
+
+    public static void syncChat(ServerPlayer player) {
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new PanelPackets.ClientboundPanelChat("", true));
+        for (String line : PanelSettingsSavedData.get(player.server).getChatLines()) {
+            ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new PanelPackets.ClientboundPanelChat(line, false));
+        }
+    }
+
+    public static void broadcastChat(MinecraftServer server, String line) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new PanelPackets.ClientboundPanelChat(line, false));
         }
     }
 

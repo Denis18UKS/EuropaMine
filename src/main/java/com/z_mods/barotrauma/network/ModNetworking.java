@@ -6,7 +6,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
-    private static final String PROTOCOL_VERSION = "4";
+    private static final String PROTOCOL_VERSION = "5";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(Barotrauma.MOD_ID, "main"),
@@ -43,6 +43,10 @@ public final class ModNetworking {
                 .encoder(PanelPackets.ClientboundPhoto::encode)
                 .decoder(PanelPackets.ClientboundPhoto::decode)
                 .consumerMainThread(PanelPackets.ClientboundPhoto::handle).add();
+        CHANNEL.messageBuilder(PanelPackets.ClientboundPanelChat.class, packetId++)
+                .encoder(PanelPackets.ClientboundPanelChat::encode)
+                .decoder(PanelPackets.ClientboundPanelChat::decode)
+                .consumerMainThread(PanelPackets.ClientboundPanelChat::handle).add();
         CHANNEL.messageBuilder(PanelPackets.ServerboundSettings.class, packetId++)
                 .encoder(PanelPackets.ServerboundSettings::encode)
                 .decoder(PanelPackets.ServerboundSettings::decode)
@@ -55,6 +59,10 @@ public final class ModNetworking {
                 .encoder(PanelPackets.ServerboundPhotoDelete::encode)
                 .decoder(PanelPackets.ServerboundPhotoDelete::decode)
                 .consumerMainThread(PanelPackets.ServerboundPhotoDelete::handle).add();
+        CHANNEL.messageBuilder(PanelPackets.ServerboundPanelChat.class, packetId++)
+                .encoder(PanelPackets.ServerboundPanelChat::encode)
+                .decoder(PanelPackets.ServerboundPanelChat::decode)
+                .consumerMainThread(PanelPackets.ServerboundPanelChat::handle).add();
         CHANNEL.messageBuilder(PanelPackets.ServerboundStartSession.class, packetId++)
                 .encoder(PanelPackets.ServerboundStartSession::encode)
                 .decoder(PanelPackets.ServerboundStartSession::decode)

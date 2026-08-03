@@ -98,7 +98,9 @@ abstract class AbstractPanelScreen extends Screen {
     }
 
     protected Component styled(String value) {
-        return Component.literal(value).withStyle(Style.EMPTY.withFont(PANEL_FONT));
+        // Bold uniform glyphs remain legible with both states of Minecraft's "Force Unicode Font"
+        // option, while keeping stable metrics for this dense coordinate-driven screen.
+        return Component.literal(value).withStyle(Style.EMPTY.withFont(PANEL_FONT).withBold(true));
     }
 
     protected int styledWidth(String value) {

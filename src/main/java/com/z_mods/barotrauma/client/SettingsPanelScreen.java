@@ -27,7 +27,6 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     };
     private static final String[] MODES = {"ПЕСОЧНИЦА", "МИССИЯ", "ИГРОК ПРОТИВ ИГРОКА", "КАМПАНИЯ"};
     private static final String[] PROFESSIONS = {"Инженер", "Помощник", "Врач", "Механик", "Офицер охраны", "Капитан"};
-    private static final String[] TEAMS = {"Коалиция", "Без предпочтений", "Сепаратисты"};
     private PanelSettings settings;
     private final boolean editable;
     private int submarineScroll;
@@ -42,11 +41,11 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     private boolean watch;
     private boolean afk;
     private boolean ready;
-    private int teamPreference = 1;
     private int profession = 5;
     private boolean professionPopup;
     private boolean loadoutPopup;
     private boolean enlargedPhoto;
+    private boolean respawnShuttlePopup;
     private int campaignWarningSubmarine = -1;
     private String notice = "";
     private long noticeUntil;
@@ -255,14 +254,35 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             button(g, choice(settings.respawnMode, "В ходе раунда", "Между раундами", "Отключено"),
                     673, 380, 130, 20, editable, inside(mx, my, 673, 380, 803, 400));
             checkbox(g, "Челнок возрождения", 557, 411, settings.respawnShuttle, editable);
+            if (settings.respawnShuttle) {
+                button(g, PanelSettings.RESPAWN_SHUTTLES.get(settings.respawnShuttleType), 673, 405, 130, 20,
+                        editable, inside(mx, my, 673, 405, 803, 425));
+            }
             slider(g, "Интервал", 557, 438, 140, settings.respawnInterval - 10, 290, " с");
             slider(g, "Порог игроков", 557, 477, 140, settings.respawnThreshold, 100, "%");
             slider(g, "Время действия челнока", 557, 516, 140, settings.respawnWindow, 30, " мин");
             slider(g, "Потеря навыка при смерти", 557, 555, 140, settings.skillLossDeath, 100, "%");
             slider(g, "Потеря при немедленном", 557, 594, 140, settings.skillLossImmediate, 100, "%");
+            if (respawnShuttlePopup && settings.respawnShuttle) drawRespawnShuttlePopup(g, mx, my);
         } else {
             drawAdvantages(g, mx, my);
         }
+    }
+
+    private void drawRespawnShuttlePopup(GuiGraphics g, double mx, double my) {
+        g.pose().pushPose();
+        g.pose().translate(0.0F, 0.0F, 350.0F);
+        panel(g, 673, 427, 130, PanelSettings.RESPAWN_SHUTTLES.size() * 23 + 4);
+        for (int i = 0; i < PanelSettings.RESPAWN_SHUTTLES.size(); i++) {
+            int y = 430 + i * 23;
+            boolean selected = settings.respawnShuttleType == i;
+            if (selected || inside(mx, my, 676, y, 800, y + 21)) {
+                g.fill(676, y, 800, y + 21, selected ? 0xFF27443B : 0xFF14231F);
+            }
+            text(g, PanelSettings.RESPAWN_SHUTTLES.get(i), 681, y + 5, selected ? ACCENT : TEXT);
+            text(g, "Челнок", 754, y + 5, MUTED);
+        }
+        g.pose().popPose();
     }
 
     private void drawAdvantages(GuiGraphics g, double mx, double my) {
@@ -310,19 +330,16 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         centered(g, "Щёлкните для выбора профессии", 1060, 300, TEXT);
         text(g, "ⓘ", 853, 329, ACCENT);
         text(g, "⊗", 1140, 329, MUTED);
-        for (int i = 0; i < TEAMS.length; i++) {
-            int x = 842 + i * 110;
-            button(g, TEAMS[i], x, 358, 110, 20, teamPreference == i, inside(mx, my, x, 358, x + 110, 378));
+        button(g, "ЧАТ", 842, 360, 160, 20, true, inside(mx, my, 842, 360, 1002, 380));
+        button(g, "ЖУРНАЛ СЕРВЕРА", 1007, 360, 166, 20, false, inside(mx, my, 1007, 360, 1173, 380));
+        panel(g, 842, 384, 197, 205);
+        List<String> chatLines = ClientPanelChat.lines();
+        int firstLine = Math.max(0, chatLines.size() - 13);
+        for (int i = firstLine; i < chatLines.size(); i++) {
+            text(g, fit(chatLines.get(i), 180), 849, 393 + (i - firstLine) * 14, 0xFF91EF9B);
         }
-        button(g, "ЧАТ", 842, 388, 160, 20, true, inside(mx, my, 842, 388, 1002, 408));
-        button(g, "ЖУРНАЛ СЕРВЕРА", 1007, 388, 166, 20, false, inside(mx, my, 1007, 388, 1173, 408));
-        panel(g, 842, 412, 197, 177);
-        text(g, fit("[19:43] Игрок присоединился к серверу.", 180), 849, 421, 0xFF91EF9B);
-        text(g, fit("[19:44] Настройки панели загружены.", 180), 849, 436, 0xFF91EF9B);
-        text(g, fit("[19:45] Выбрана: " + PanelSettings.SUBMARINES.get(settings.submarine), 180),
-                849, 451, 0xFF91EF9B);
-        panel(g, 1044, 412, 129, 177);
-        text(g, name, 1052, 421, TEXT);
+        panel(g, 1044, 384, 129, 205);
+        text(g, name, 1052, 393, TEXT);
         g.fill(842, 594, 331 + 842, 613, 0xFF07100E);
         border(g, 842, 594, 331, 19, focus == Focus.CHAT ? ACCENT : BORDER);
         text(g, chat.isEmpty() ? "Сообщение…" : fit(chat, 300), 849, 599, chat.isEmpty() ? MUTED : BRIGHT);
@@ -488,6 +505,17 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         }
         double rawY = y;
         y += MAIN_SHIFT;
+        if (respawnShuttlePopup) {
+            for (int i = 0; i < PanelSettings.RESPAWN_SHUTTLES.size(); i++) {
+                if (inside(x, y, 676, 430 + i * 23, 800, 451 + i * 23)) {
+                    int selected = i;
+                    edit(() -> settings.respawnShuttleType = selected);
+                    respawnShuttlePopup = false;
+                    return true;
+                }
+            }
+            respawnShuttlePopup = false;
+        }
         for (int i = 0; i < MODES.length; i++) {
             int row = i - modeScroll;
             if (row >= 0 && row < 4 && inside(x, y, 21, 117 + row * 54, 253, 165 + row * 54)) {
@@ -560,7 +588,15 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         if (inside(x, y, 690, 356, 815, 376)) { respawnTab = false; return true; }
         if (respawnTab) {
             if (inside(x, y, 673, 380, 803, 400)) { edit(() -> settings.respawnMode = (settings.respawnMode + 1) % 3); return true; }
-            if (inside(x, y, 557, 408, 790, 430)) { edit(() -> settings.respawnShuttle = !settings.respawnShuttle); return true; }
+            if (inside(x, y, 557, 408, 670, 430)) {
+                edit(() -> settings.respawnShuttle = !settings.respawnShuttle);
+                if (!settings.respawnShuttle) respawnShuttlePopup = false;
+                return true;
+            }
+            if (settings.respawnShuttle && inside(x, y, 673, 405, 803, 425)) {
+                respawnShuttlePopup = !respawnShuttlePopup;
+                return true;
+            }
             if (sliderClick(x, y, "respawn_interval", 557, 449, 140)) return true;
             if (sliderClick(x, y, "respawn_threshold", 557, 488, 140)) return true;
             if (sliderClick(x, y, "respawn_window", 557, 527, 140)) return true;
@@ -579,7 +615,6 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         if (inside(x, y, 843, 28, 980, 50)) { watch = !watch; return true; }
         if (inside(x, y, 1020, 28, 1150, 50)) { afk = !afk; return true; }
         if (inside(x, y, 842, 104, 1173, 354)) { professionPopup = true; return true; }
-        for (int i = 0; i < 3; i++) if (inside(x, y, 842 + i * 110, 358, 952 + i * 110, 378)) { teamPreference = i; return true; }
         if (inside(x, y, 842, 594, 1173, 613)) { focus = Focus.CHAT; return true; }
         if (inside(x, y, 620, 640, 820, 667)) { edit(() -> settings.autoRestart = !settings.autoRestart); return true; }
         if (inside(x, y, 842, 640, 1015, 667)) { ready = !ready; return true; }
@@ -689,8 +724,10 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             }
             if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
                 if (focus == Focus.CHAT && !chat.isBlank()) {
-                    notifyUser("Сообщение отправлено локально: " + fit(chat, 180));
+                    ModNetworking.CHANNEL.sendToServer(new PanelPackets.ServerboundPanelChat(chat));
                     chat = "";
+                    focus = Focus.CHAT;
+                    return true;
                 } else if (focus == Focus.SEED || focus == Focus.SAVE) changed();
                 focus = Focus.NONE;
                 return true;

@@ -117,8 +117,8 @@ abstract class AbstractPanelScreen extends Screen {
 
     protected void drawPlayerHead(GuiGraphics graphics, int x, int y, int size) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player instanceof AbstractClientPlayer player) {
-            ResourceLocation skin = player.getSkinTextureLocation();
+        if (minecraft.player != null) {
+            ResourceLocation skin = ((AbstractClientPlayer) minecraft.player).getSkinTextureLocation();
             graphics.blit(skin, x, y, size, size, 8, 8, 8, 8, 64, 64);
             graphics.blit(skin, x, y, size, size, 40, 8, 8, 8, 64, 64);
         } else {

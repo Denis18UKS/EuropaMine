@@ -2,9 +2,9 @@ package com.z_mods.barotrauma.client;
 
 import com.z_mods.barotrauma.network.ModNetworking;
 import com.z_mods.barotrauma.network.PanelPackets;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
-import net.minecraft.client.renderer.texture.NativeImage;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;

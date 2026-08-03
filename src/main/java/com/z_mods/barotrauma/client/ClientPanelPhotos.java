@@ -1,9 +1,9 @@
 package com.z_mods.barotrauma.client;
 
 import com.z_mods.barotrauma.Barotrauma;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.client.renderer.texture.NativeImage;
 import net.minecraft.resources.ResourceLocation;
 
 import java.io.ByteArrayInputStream;

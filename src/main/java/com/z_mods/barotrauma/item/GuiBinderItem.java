@@ -39,10 +39,19 @@ public final class GuiBinderItem extends Item {
         if (PowerSystem.isKnownGui(guiId)) stack.getOrCreateTag().putString(SELECTED_GUI, guiId);
     }
 
+    private static boolean canConfigure(ServerPlayer player) {
+        return player.isCreative() || player.hasPermissions(2);
+    }
+
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+            if (!canConfigure(serverPlayer)) {
+                serverPlayer.displayClientMessage(Component.literal(
+                        "Инструмент привязки GUI доступен только оператору или в творческом режиме."), true);
+                return InteractionResultHolder.fail(stack);
+            }
             PowerPackets.sendOpenBinder(serverPlayer, selected(stack));
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
@@ -54,6 +63,11 @@ public final class GuiBinderItem extends Item {
         Player player = context.getPlayer();
         if (!(level instanceof ServerLevel serverLevel) || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.sidedSuccess(level.isClientSide);
+        }
+        if (!canConfigure(serverPlayer)) {
+            serverPlayer.displayClientMessage(Component.literal(
+                    "Инструмент привязки GUI доступен только оператору или в творческом режиме."), true);
+            return InteractionResult.FAIL;
         }
 
         BlockPos pos = context.getClickedPos();
@@ -88,5 +102,6 @@ public final class GuiBinderItem extends Item {
         lines.add(Component.literal("ПКМ в воздух: список GUI").withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal("ПКМ по блоку: привязать").withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal("Shift + ПКМ: удалить привязку").withStyle(ChatFormatting.DARK_GRAY));
+        lines.add(Component.literal("Требуется оператор или творческий режим").withStyle(ChatFormatting.DARK_RED));
     }
 }

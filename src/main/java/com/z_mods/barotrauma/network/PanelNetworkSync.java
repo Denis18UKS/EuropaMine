@@ -1,12 +1,17 @@
 package com.z_mods.barotrauma.network;
 
+import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.panel.PanelPhotoStorage;
 import com.z_mods.barotrauma.panel.PanelSettings;
 import com.z_mods.barotrauma.panel.PanelSettingsSavedData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
+@Mod.EventBusSubscriber(modid = Barotrauma.MOD_ID)
 public final class PanelNetworkSync {
     private PanelNetworkSync() {
     }
@@ -15,6 +20,15 @@ public final class PanelNetworkSync {
         PanelSettings settings = PanelSettingsSavedData.get(player.server).getSettings();
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new PanelPackets.ClientboundOpenPanel(settings.toTag(), canEdit(player)));
+        syncPhotos(player);
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        PanelSettings settings = PanelSettingsSavedData.get(player.server).getSettings();
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new PanelPackets.ClientboundSettings(settings.toTag()));
         syncPhotos(player);
     }
 

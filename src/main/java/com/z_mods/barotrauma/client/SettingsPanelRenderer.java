@@ -17,7 +17,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 
-/** Full-bright world preview painted over the physical 7x4 panel. */
+/** Full-bright, always visible summary painted over the physical 7x4 panel. */
 public final class SettingsPanelRenderer implements BlockEntityRenderer<SettingsPanelBlockEntity> {
     private final Font font;
 
@@ -37,21 +37,50 @@ public final class SettingsPanelRenderer implements BlockEntityRenderer<Settings
                 0.5D + right.getStepZ() * 3.0D);
         poses.translate(facing.getStepX() * 0.506D, 0.0D, facing.getStepZ() * 0.506D);
         poses.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
-        poses.scale(0.025F, -0.025F, 0.025F);
+        poses.scale(0.029F, -0.029F, 0.029F);
 
-        drawCentered(poses, buffers, "НАСТРОЙКИ СЕРВЕРА", 0, -67, 0xFFB7D5CD);
-        drawCentered(poses, buffers, modeName(settings.gameMode), -88, -48, 0xFFE9E3B0);
-        drawCentered(poses, buffers, PanelSettings.SUBMARINES.get(settings.submarine), 0, 50, 0xFFFFE8A6);
-        drawCentered(poses, buffers, "Игроков: " + settings.minimumPlayers + "+", 88, -48, 0xFFE9E3B0);
-        drawCentered(poses, buffers, settings.autoRestart ? "Автоперезапуск: да" : "Автоперезапуск: нет",
-                88, 51, settings.autoRestart ? 0xFF69D3B2 : 0xFF8B9690);
-        drawPhoto(poses, buffers, ClientPanelPhotos.texture(settings.submarine), -50, -42, 50, 43);
+        drawCentered(poses, buffers, "НАСТРОЙКИ СЕРВЕРА", 0, -64, 0xFFFFFFFF);
+        drawCentered(poses, buffers, modeName(settings.gameMode), -79, -50, 0xFFFFF1A6);
+        drawCentered(poses, buffers, PanelSettings.SUBMARINES.get(settings.submarine), 0, -50, 0xFFFFF1A6);
+        drawCentered(poses, buffers, "ИГРОКИ: " + settings.minimumPlayers + "+", 79, -50, 0xFFFFF1A6);
+
+        drawText(poses, buffers, "РЕЖИМ", -111, -36, 0xFF8AD6BE);
+        drawText(poses, buffers, modeName(settings.gameMode), -111, -24, 0xFFFFFFFF);
+        drawText(poses, buffers, missionSummary(settings), -111, -12, 0xFFFFF6C8);
+        drawText(poses, buffers, "Сложность: " + settings.difficulty + "%", -111, 0, 0xFFFFFFFF);
+        drawText(poses, buffers, "Боты: " + settings.botCount, -111, 12, 0xFFFFFFFF);
+        drawText(poses, buffers, "Предатели: " + settings.betrayalChance + "%", -111, 24, 0xFFFFFFFF);
+        drawText(poses, buffers, "Мин. игроков: " + settings.minimumPlayers, -111, 36, 0xFFFFFFFF);
+        drawText(poses, buffers, settings.autoRestart ? "Автоперезапуск: ДА" : "Автоперезапуск: НЕТ",
+                -111, 49, settings.autoRestart ? 0xFF7FFFD4 : 0xFFBCC6C1);
+
+        drawPhoto(poses, buffers, ClientPanelPhotos.texture(settings.submarine), -35, -37, 35, 15);
+        drawCentered(poses, buffers, "Цена: " + PanelSettings.submarinePrice(settings.submarine) + " кред.",
+                0, 20, settings.canUseSubmarine(settings.submarine) ? 0xFFFFFFFF : 0xFFFF6F6F);
+        drawCentered(poses, buffers, "Зона: " + zoneName(settings.naturalZone), 0, 33, 0xFFFFF6C8);
+        drawCentered(poses, buffers, settings.gameMode == 3 ? "Кампания: " + settings.saveName : "Шифр: " + settings.levelSeed,
+                0, 46, 0xFFFFFFFF);
+
+        drawText(poses, buffers, "ВОЗРОЖДЕНИЕ", 43, -36, 0xFF8AD6BE);
+        drawText(poses, buffers, respawnName(settings.respawnMode), 43, -24, 0xFFFFFFFF);
+        drawText(poses, buffers, "Интервал: " + settings.respawnInterval + " с", 43, -12, 0xFFFFFFFF);
+        drawText(poses, buffers, "Порог: " + settings.respawnThreshold + "%", 43, 0, 0xFFFFFFFF);
+        drawText(poses, buffers, "Окно: " + settings.respawnWindow + " мин", 43, 12, 0xFFFFFFFF);
+        drawText(poses, buffers, "Потеря навыка: " + settings.skillLossDeath + "%", 43, 24, 0xFFFFFFFF);
+        drawText(poses, buffers, "Замена: " + settings.replacementCost + "%", 43, 36, 0xFFFFFFFF);
+        drawText(poses, buffers, settings.ironMan ? "ЖЕЛЕЗНЫЙ ЧЕЛОВЕК" : "Обычные правила",
+                43, 49, settings.ironMan ? 0xFFFF7A7A : 0xFF7FFFD4);
         poses.popPose();
     }
 
+    private void drawText(PoseStack poses, MultiBufferSource buffers, String text, float x, float y, int color) {
+        font.drawInBatch(text, x, y, color, true,
+                poses.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0, LightTexture.FULL_BRIGHT);
+    }
+
     private void drawCentered(PoseStack poses, MultiBufferSource buffers, String text, float x, float y, int color) {
-        font.drawInBatch(text, x - font.width(text) / 2.0F, y, color, false,
-                poses.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, LightTexture.FULL_BRIGHT);
+        font.drawInBatch(text, x - font.width(text) / 2.0F, y, color, true,
+                poses.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0, LightTexture.FULL_BRIGHT);
     }
 
     private static String modeName(int mode) {
@@ -60,6 +89,39 @@ public final class SettingsPanelRenderer implements BlockEntityRenderer<Settings
             case 2 -> "PVP";
             case 3 -> "КАМПАНИЯ";
             default -> "МИССИЯ";
+        };
+    }
+
+    private static String missionSummary(PanelSettings settings) {
+        return switch (settings.gameMode) {
+            case 0 -> "Без обязательных миссий";
+            case 2 -> "PVP-задач: " + count(settings.pvpMissionEnabled);
+            case 3 -> "Кампания";
+            default -> "Миссий: " + count(settings.missionEnabled);
+        };
+    }
+
+    private static int count(boolean[] values) {
+        int total = 0;
+        for (boolean value : values) if (value) total++;
+        return total;
+    }
+
+    private static String zoneName(int zone) {
+        return switch (zone) {
+            case 1 -> "Холодные пещеры";
+            case 2 -> "Европейский хребет";
+            case 3 -> "Бездна";
+            case 4 -> "Руины";
+            default -> "Случайно";
+        };
+    }
+
+    private static String respawnName(int mode) {
+        return switch (mode) {
+            case 1 -> "Между раундами";
+            case 2 -> "Отключено";
+            default -> "В ходе раунда";
         };
     }
 
@@ -86,6 +148,6 @@ public final class SettingsPanelRenderer implements BlockEntityRenderer<Settings
 
     @Override
     public int getViewDistance() {
-        return 256;
+        return 512;
     }
 }

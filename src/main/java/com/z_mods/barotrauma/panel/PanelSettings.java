@@ -15,6 +15,9 @@ public final class PanelSettings {
     public static final List<String> SUBMARINES = List.of(
             "Азимут", "Барсук", "Бериллия", "Верблюд", "Дюгонь", "Хемуль",
             "Гейра", "Горбун", "Кастрюля", "Косатка", "Косатка-2", "R-29 «Фура»");
+    public static final List<Integer> SUBMARINE_PRICES = List.of(
+            14_000, 3_999, 24_000, 9_900, 5_000, 0,
+            16_500, 13_000, 31_000, 9_000, 13_000, 16_500);
     public static final List<String> MISSIONS = List.of(
             "Вражеская подлодка", "Гнездо", "Груз", "Добыча из обломков",
             "Добыча из пещеры", "Добыча из руин", "Добыча минералов",
@@ -22,10 +25,14 @@ public final class PanelSettings {
             "Маяк", "Монстры заброшенного аванпоста", "Побег из тюрьмы",
             "Разрушить заброшенный аванпост", "Сканирование инопланетных руин",
             "Сопровождение", "Спасение заброшенного аванпоста", "Уничтожить таламуса", "Чудовище");
+    public static final List<String> PVP_MISSIONS = List.of(
+            "Бой за аванпост", "Подлодка на подлодку", "Царь корпуса");
 
     public int gameMode = 1;
     public int submarine = 4;
     public final boolean[] missionEnabled = new boolean[MISSIONS.size()];
+    public final boolean[] pvpMissionEnabled = new boolean[PVP_MISSIONS.size()];
+    public final boolean[] submarinePurchased = new boolean[SUBMARINES.size()];
     public final String[] photoNames = new String[PHOTO_SLOTS];
     public String levelSeed = "Europa";
     public String saveName = "Новая кампания";
@@ -54,6 +61,10 @@ public final class PanelSettings {
 
     public PanelSettings() {
         Arrays.fill(missionEnabled, true);
+        Arrays.fill(pvpMissionEnabled, true);
+        // Стартовый набор кампании из референса: дешёвые купленные лодки доступны,
+        // остальные остаются в списке с красной ценой и предупреждением.
+        for (int index : new int[]{1, 3, 4, 9}) submarinePurchased[index] = true;
         for (int i = 0; i < photoNames.length; i++) {
             photoNames[i] = "Подлодка " + (i + 1);
         }
@@ -127,6 +138,8 @@ public final class PanelSettings {
         tag.putBoolean("Radiation", radiation);
         tag.putBoolean("AutoRestart", autoRestart);
         tag.put("Missions", writeBooleans(missionEnabled));
+        tag.put("PvpMissions", writeBooleans(pvpMissionEnabled));
+        tag.put("PurchasedSubmarines", writeBooleans(submarinePurchased));
         ListTag names = new ListTag();
         for (String name : photoNames) names.add(StringTag.valueOf(name));
         tag.put("PhotoNames", names);
@@ -176,6 +189,17 @@ public final class PanelSettings {
         for (int i = 0; i < value.missionEnabled.length && i < missions.size(); i++) {
             value.missionEnabled[i] = missions.getCompound(i).getBoolean("Value");
         }
+        ListTag pvpMissions = tag.getList("PvpMissions", 10);
+        for (int i = 0; i < value.pvpMissionEnabled.length && i < pvpMissions.size(); i++) {
+            value.pvpMissionEnabled[i] = pvpMissions.getCompound(i).getBoolean("Value");
+        }
+        ListTag purchased = tag.getList("PurchasedSubmarines", 10);
+        if (!purchased.isEmpty()) {
+            Arrays.fill(value.submarinePurchased, false);
+            for (int i = 0; i < value.submarinePurchased.length && i < purchased.size(); i++) {
+                value.submarinePurchased[i] = purchased.getCompound(i).getBoolean("Value");
+            }
+        }
         ListTag names = tag.getList("PhotoNames", 8);
         for (int i = 0; i < value.photoNames.length && i < names.size(); i++) {
             value.photoNames[i] = names.getString(i);
@@ -190,5 +214,28 @@ public final class PanelSettings {
             if (missionEnabled[i]) result.add(MISSIONS.get(i));
         }
         return result;
+    }
+
+    public static int submarinePrice(int index) {
+        return SUBMARINE_PRICES.get(Mth.clamp(index, 0, SUBMARINE_PRICES.size() - 1));
+    }
+
+    public boolean canUseSubmarine(int index) {
+        return gameMode != 3 || submarinePurchased[Mth.clamp(index, 0, submarinePurchased.length - 1)];
+    }
+
+    public int firstPurchasedSubmarine() {
+        for (int i = 0; i < submarinePurchased.length; i++) {
+            if (submarinePurchased[i]) return i;
+        }
+        return 0;
+    }
+
+    public int startingBalanceCredits() {
+        return switch (startingBalance) {
+            case 0 -> 0;
+            case 2 -> 30_000;
+            default -> 10_000;
+        };
     }
 }

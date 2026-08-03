@@ -27,12 +27,19 @@ public final class PanelSettings {
             "Сопровождение", "Спасение заброшенного аванпоста", "Уничтожить таламуса", "Чудовище");
     public static final List<String> PVP_MISSIONS = List.of(
             "Бой за аванпост", "Подлодка на подлодку", "Царь корпуса");
+    public static final List<String> ADVANTAGES = List.of(
+            "Малый калибр", "Усмирение", "Ближний бой", "Дальний бой",
+            "Базовое", "Комплект мобильности", "Абордажные комплекты",
+            "Первая помощь", "Полевая хирургия", "Ремонт", "Электротехника", "Управление реактором");
+    public static final List<Integer> ADVANTAGE_COSTS = List.of(0, 2, 2, 3, 0, 2, 3, 1, 3, 1, 2, 3);
+    public static final int ADVANTAGE_POINTS = 7;
 
     public int gameMode = 1;
     public int submarine = 4;
     public final boolean[] missionEnabled = new boolean[MISSIONS.size()];
     public final boolean[] pvpMissionEnabled = new boolean[PVP_MISSIONS.size()];
     public final boolean[] submarinePurchased = new boolean[SUBMARINES.size()];
+    public final boolean[] advantageEnabled = new boolean[ADVANTAGES.size()];
     public final String[] photoNames = new String[PHOTO_SLOTS];
     public String levelSeed = "Europa";
     public String saveName = "Новая кампания";
@@ -94,6 +101,17 @@ public final class PanelSettings {
         startingSupplies = Mth.clamp(startingSupplies, 0, 2);
         startingBalance = Mth.clamp(startingBalance, 0, 2);
         maxMissionsPerRound = Mth.clamp(maxMissionsPerRound, 1, 10);
+        while (advantagePointsRemaining() < 0) {
+            boolean removed = false;
+            for (int i = advantageEnabled.length - 1; i >= 0; i--) {
+                if (advantageEnabled[i] && ADVANTAGE_COSTS.get(i) > 0) {
+                    advantageEnabled[i] = false;
+                    removed = true;
+                    break;
+                }
+            }
+            if (!removed) break;
+        }
         levelSeed = clean(levelSeed, "Europa", 32);
         saveName = clean(saveName, "Новая кампания", 40);
         for (int i = 0; i < photoNames.length; i++) {
@@ -140,6 +158,7 @@ public final class PanelSettings {
         tag.put("Missions", writeBooleans(missionEnabled));
         tag.put("PvpMissions", writeBooleans(pvpMissionEnabled));
         tag.put("PurchasedSubmarines", writeBooleans(submarinePurchased));
+        tag.put("Advantages", writeBooleans(advantageEnabled));
         ListTag names = new ListTag();
         for (String name : photoNames) names.add(StringTag.valueOf(name));
         tag.put("PhotoNames", names);
@@ -200,6 +219,10 @@ public final class PanelSettings {
                 value.submarinePurchased[i] = purchased.getCompound(i).getBoolean("Value");
             }
         }
+        ListTag advantages = tag.getList("Advantages", 10);
+        for (int i = 0; i < value.advantageEnabled.length && i < advantages.size(); i++) {
+            value.advantageEnabled[i] = advantages.getCompound(i).getBoolean("Value");
+        }
         ListTag names = tag.getList("PhotoNames", 8);
         for (int i = 0; i < value.photoNames.length && i < names.size(); i++) {
             value.photoNames[i] = names.getString(i);
@@ -237,5 +260,13 @@ public final class PanelSettings {
             case 2 -> 30_000;
             default -> 10_000;
         };
+    }
+
+    public int advantagePointsRemaining() {
+        int remaining = ADVANTAGE_POINTS;
+        for (int i = 0; i < advantageEnabled.length; i++) {
+            if (advantageEnabled[i]) remaining -= ADVANTAGE_COSTS.get(i);
+        }
+        return remaining;
     }
 }

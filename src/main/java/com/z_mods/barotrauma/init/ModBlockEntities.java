@@ -5,6 +5,7 @@ import com.z_mods.barotrauma.blocks.AnimatedStructureConfigBlockEntity;
 import com.z_mods.barotrauma.blocks.VentDecoEntity;
 import com.z_mods.barotrauma.blocks.VentDecoIntEntity;
 import com.z_mods.barotrauma.blocks.StructureConfigBlockEntity;
+import com.z_mods.barotrauma.blocks.SettingsPanelBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -35,4 +36,9 @@ public class ModBlockEntities {
             () -> BlockEntityType.Builder.of(AnimatedStructureConfigBlockEntity::new,
                     ModBlocks.SUBMARINE_BUTTON_BLOCK.get(),
                     ModBlocks.SUBMARINE_DOOR.get()).build(null));
+
+    public static final RegistryObject<BlockEntityType<SettingsPanelBlockEntity>> SETTINGS_PANEL =
+        BLOCK_ENTITIES.register("settings_panel",
+            () -> BlockEntityType.Builder.of(SettingsPanelBlockEntity::new,
+                    ModBlocks.SETTINGS_PANEL.get()).build(null));
 }

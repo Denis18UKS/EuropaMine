@@ -34,5 +34,14 @@
     "creativetab.barotrauma_tools_tab": "Barotrauma Tools",
     "key.categories.barotrauma": "Barotrauma",
     "key.barotrauma.structure_configurator": "Open Structure Configurator",
-    "container.vent": "Half-Opened Vent"
+    "container.vent": "Half-Opened Vent",
+    "block.barotrauma.settings_panel": "Server Settings Panel",
+    "item.barotrauma.panel_camera": "Panel Camera",
+    "screen.barotrauma.settings_panel": "Server Settings",
+    "screen.barotrauma.panel_camera": "Panel Gallery",
+    "message.barotrauma.panel_obstructed": "The panel needs a clear 7x4 block area",
+    "message.barotrauma.photo_saved": "Photo for slot %s saved",
+    "message.barotrauma.photo_failed": "Could not take the photo",
+    "message.barotrauma.not_enough_players": "At least %s players are required",
+    "message.barotrauma.session_started": "Session started. Submarine: %s"
 }

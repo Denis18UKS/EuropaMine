@@ -9,6 +9,7 @@ import com.z_mods.barotrauma.init.ModMenus; // ВАШ класс
 import com.z_mods.barotrauma.blocks.StructureConfigBlockRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
+import com.z_mods.barotrauma.client.SettingsPanelRenderer;
 import com.z_mods.barotrauma.client.VentScreen; // ВАШ класс
 import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
@@ -52,6 +53,7 @@ public class Barotrauma {
             event.accept(ModBlocks.VENT_DECO.get());
             event.accept(ModBlocks.VENT_DECO_INT.get());
             event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
+            event.accept(ModBlocks.SETTINGS_PANEL.get());
             event.accept(ModBlocks.BEDS.get());
             event.accept(ModBlocks.JUNCTION_BOX.get());
             event.accept(ModBlocks.SUBMARINE_BUTTON_BLOCK.get());
@@ -70,6 +72,7 @@ public class Barotrauma {
             event.accept(ModItems.CROWBAR.get());
             event.accept(ModItems.OXYGEN_TANK.get());
             event.accept(ModItems.WELDING_MACHINE_FUEL_TANK.get());
+            event.accept(ModItems.PANEL_CAMERA.get());
         }
     }
 
@@ -101,6 +104,11 @@ public class Barotrauma {
                 );
 
                 MenuScreens.register(ModMenus.VENT_MENU.get(), VentScreen::new);
+
+                BlockEntityRenderers.register(
+                    ModBlockEntities.SETTINGS_PANEL.get(),
+                    SettingsPanelRenderer::new
+                );
             });
         }
     }

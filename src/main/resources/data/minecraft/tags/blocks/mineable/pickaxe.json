@@ -7,6 +7,7 @@
     "barotrauma:bar_button_block",
     "barotrauma:submarine_door",
     "barotrauma:submarine_lever",
-    "barotrauma:submarine_trapdoor"
+    "barotrauma:submarine_trapdoor",
+    "barotrauma:settings_panel"
   ]
 }

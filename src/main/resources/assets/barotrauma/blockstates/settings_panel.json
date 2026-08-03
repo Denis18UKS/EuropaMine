@@ -1,0 +1,5 @@
+{
+  "multipart": [
+    { "apply": { "model": "barotrauma:block/settings_panel" } }
+  ]
+}

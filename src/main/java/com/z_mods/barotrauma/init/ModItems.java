@@ -4,7 +4,10 @@ import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.item.AccessConfiguratorItem;
 import com.z_mods.barotrauma.item.AccessNameTagItem;
 import com.z_mods.barotrauma.item.GarnitureHelmetItem;
+import com.z_mods.barotrauma.item.GuiBinderItem;
 import com.z_mods.barotrauma.item.PanelCameraItem;
+import com.z_mods.barotrauma.item.WireToolItem;
+import com.z_mods.barotrauma.power.PowerWorldData;
 import net.minecraft.world.item.ArmorMaterials;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
@@ -20,6 +23,18 @@ public class ModItems {
 
     public static final RegistryObject<Item> PANEL_CAMERA = ITEMS.register("panel_camera",
             () -> new PanelCameraItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> GUI_BINDER = ITEMS.register("gui_binder",
+            () -> new GuiBinderItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> RED_WIRE_TOOL = ITEMS.register("red_wire_tool",
+            () -> new WireToolItem(PowerWorldData.WireColor.RED, new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> BLUE_WIRE_TOOL = ITEMS.register("blue_wire_tool",
+            () -> new WireToolItem(PowerWorldData.WireColor.BLUE, new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> REACTOR_FUEL_ROD = ITEMS.register("reactor_fuel_rod",
+            () -> new Item(new Item.Properties().stacksTo(1).durability(24_000)));
 
     public static final RegistryObject<Item> ACCESS_CONFIGURATOR = ITEMS.register("access_configurator",
             () -> new AccessConfiguratorItem(new Item.Properties().stacksTo(1)));

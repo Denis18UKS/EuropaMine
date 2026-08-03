@@ -5,12 +5,12 @@ import com.z_mods.barotrauma.init.ModBlocks;
 import com.z_mods.barotrauma.init.ModBlockGroup;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModBlockEntities;
-import com.z_mods.barotrauma.init.ModMenus; // ВАШ класс
+import com.z_mods.barotrauma.init.ModMenus;
 import com.z_mods.barotrauma.blocks.StructureConfigBlockRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import com.z_mods.barotrauma.client.SettingsPanelRenderer;
-import com.z_mods.barotrauma.client.VentScreen; // ВАШ класс
+import com.z_mods.barotrauma.client.VentScreen;
 import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
@@ -22,7 +22,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
-import net.minecraft.client.gui.screens.MenuScreens; // ЭТО ПРАВИЛЬНО - КЛАСС MINECRAFT
+import net.minecraft.client.gui.screens.MenuScreens;
 import org.slf4j.Logger;
 import software.bernie.geckolib.GeckoLib;
 
@@ -40,7 +40,7 @@ public class Barotrauma {
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlockGroup.CREATIVE_MODE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
-        ModMenus.MENUS.register(modEventBus); // Регистрируем меню
+        ModMenus.MENUS.register(modEventBus);
 
         ModNetworking.register();
         modEventBus.addListener(this::addCreative);
@@ -73,17 +73,19 @@ public class Barotrauma {
             event.accept(ModItems.OXYGEN_TANK.get());
             event.accept(ModItems.WELDING_MACHINE_FUEL_TANK.get());
             event.accept(ModItems.PANEL_CAMERA.get());
+            event.accept(ModItems.GUI_BINDER.get());
+            event.accept(ModItems.RED_WIRE_TOOL.get());
+            event.accept(ModItems.BLUE_WIRE_TOOL.get());
+            event.accept(ModItems.REACTOR_FUEL_ROD.get());
         }
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-
     }
 
     @Mod.EventBusSubscriber(modid = Barotrauma.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
-        
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
             event.enqueueWork(() -> {
@@ -96,8 +98,7 @@ public class Barotrauma {
                     ModBlockEntities.VENT_DECO_INT.get(),
                     context -> new VentDecoIntRenderer()
                 );
-                
-                // Регистрируем экран для меню
+
                 BlockEntityRenderers.register(
                     ModBlockEntities.ANIMATED_STRUCTURE_CONFIG.get(),
                     context -> new StructureConfigBlockRenderer()

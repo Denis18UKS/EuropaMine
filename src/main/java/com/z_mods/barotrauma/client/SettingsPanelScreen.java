@@ -17,6 +17,14 @@ import java.util.Locale;
 
 /** Interactive server lobby/settings screen inspired by the supplied reference layout. */
 public final class SettingsPanelScreen extends AbstractPanelScreen {
+    private static final int MAIN_SHIFT = 78;
+    private static final int ADVANTAGE_VISIBLE_ROWS = 10;
+    private static final String[] ADVANTAGE_ROWS = {
+            "#АРСЕНАЛ", "0", "1", "2", "3",
+            "#ДАЙВИНГ", "4", "5", "6",
+            "#МЕДИЦИНА", "7", "8",
+            "#ИНЖЕНЕРИЯ", "9", "10", "11"
+    };
     private static final String[] MODES = {"ПЕСОЧНИЦА", "МИССИЯ", "ИГРОК ПРОТИВ ИГРОКА", "КАМПАНИЯ"};
     private static final String[] PROFESSIONS = {"Инженер", "Помощник", "Врач", "Механик", "Офицер охраны", "Капитан"};
     private static final String[] TEAMS = {"Коалиция", "Без предпочтений", "Сепаратисты"};
@@ -25,6 +33,7 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     private int submarineScroll;
     private int missionScroll;
     private int modeScroll;
+    private int advantageScroll;
     private String search = "";
     private String chat = "";
     private Focus focus = Focus.NONE;
@@ -58,12 +67,14 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         beginCanvas(graphics);
         double mx = vx(mouseX), my = vy(mouseY);
-        drawHeader(graphics, mx, my);
-        drawModePanel(graphics, mx, my);
-        drawSubmarinePanel(graphics, mx, my);
-        drawMissionPanel(graphics, mx, my);
-        drawGameSettings(graphics, mx, my);
-        drawRespawnSettings(graphics, mx, my);
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, -MAIN_SHIFT, 0.0F);
+        drawModePanel(graphics, mx, my + MAIN_SHIFT);
+        drawSubmarinePanel(graphics, mx, my + MAIN_SHIFT);
+        drawMissionPanel(graphics, mx, my + MAIN_SHIFT);
+        drawGameSettings(graphics, mx, my + MAIN_SHIFT);
+        drawRespawnSettings(graphics, mx, my + MAIN_SHIFT);
+        graphics.pose().popPose();
         drawPlayerPanel(graphics, mx, my);
         if (!editable) {
             graphics.fill(420, 5, 780, 24, 0xD080321F);
@@ -92,18 +103,6 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         }
         endCanvas(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
-    }
-
-    private void drawHeader(GuiGraphics g, double mx, double my) {
-        g.fill(15, 15, 815, 86, 0xFF132A25);
-        border(g, 15, 15, 800, 71, BORDER);
-        button(g, "Развлечение", 25, 23, 83, 18, true, inside(mx, my, 25, 23, 108, 41));
-        button(g, "Открытый", 112, 23, 70, 18, true, inside(mx, my, 112, 23, 182, 41));
-        String name = Minecraft.getInstance().player == null ? "Игрок" : Minecraft.getInstance().player.getName().getString();
-        text(g, name, 26, 51, BRIGHT);
-        button(g, "Описание", 25, 69, 160, 14, true, inside(mx, my, 25, 69, 185, 83));
-        button(g, "НАСТРОЙКИ СЕРВЕРА", 665, 20, 140, 30, true, inside(mx, my, 665, 20, 805, 50));
-        text(g, "⚙  Люди  Звук  Предатели  Другое", 653, 60, TEXT);
     }
 
     private void drawModePanel(GuiGraphics g, double mx, double my) {
@@ -262,20 +261,39 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             slider(g, "Потеря навыка при смерти", 557, 555, 140, settings.skillLossDeath, 100, "%");
             slider(g, "Потеря при немедленном", 557, 594, 140, settings.skillLossImmediate, 100, "%");
         } else {
-            heading(g, "ОЧКИ ПРЕИМУЩЕСТВА", 557, 388);
-            slider(g, "Стоимость замены персонажа", 557, 415, 140, settings.replacementCost, 100, "%");
-            checkbox(g, "Разрешить управление ботом", 557, 459, settings.botControl, editable);
-            checkbox(g, "ЖЕЛЕЗНЫЙ ЧЕЛОВЕК", 557, 486, settings.ironMan, editable);
-            text(g, "Эти параметры действуют для всех", 557, 528, MUTED);
-            text(g, "игроков на сервере и сохраняются", 557, 542, MUTED);
-            text(g, "вместе с миром.", 557, 556, MUTED);
+            drawAdvantages(g, mx, my);
         }
+    }
+
+    private void drawAdvantages(GuiGraphics g, double mx, double my) {
+        int maximum = Math.max(0, ADVANTAGE_ROWS.length - ADVANTAGE_VISIBLE_ROWS);
+        advantageScroll = Mth.clamp(advantageScroll, 0, maximum);
+        for (int row = 0; row < ADVANTAGE_VISIBLE_ROWS && advantageScroll + row < ADVANTAGE_ROWS.length; row++) {
+            String token = ADVANTAGE_ROWS[advantageScroll + row];
+            int y = 386 + row * 21;
+            if (token.startsWith("#")) {
+                centered(g, token.substring(1), 680, y + 3, TEXT);
+                continue;
+            }
+            int index = Integer.parseInt(token);
+            boolean selected = settings.advantageEnabled[index];
+            boolean hover = inside(mx, my, 555, y, 802, y + 20);
+            if (selected || hover) g.fill(555, y, 802, y + 20, selected ? 0xFF27443B : 0xFF14231F);
+            text(g, selected ? "✓ " + PanelSettings.ADVANTAGES.get(index) : PanelSettings.ADVANTAGES.get(index),
+                    561, y + 5, selected ? ACCENT : TEXT);
+            String cost = Integer.toString(PanelSettings.ADVANTAGE_COSTS.get(index));
+            text(g, cost, 785, y + 5, selected ? ACCENT : BRIGHT);
+        }
+        scrollbar(g, 806, 386, 210, advantageScroll, maximum);
+        g.fill(555, 607, 808, 631, 0xFF07100E);
+        centered(g, settings.advantagePointsRemaining() + " ОЧК. ОСТАЛОСЬ", 681, 614,
+                settings.advantagePointsRemaining() == 0 ? DANGER : BRIGHT);
     }
 
     private void drawPlayerPanel(GuiGraphics g, double mx, double my) {
         panel(g, 830, 15, 355, 619);
         checkbox(g, "Наблюдать", 843, 31, watch, true);
-        checkbox(g, "AFK", 1020, 31, afk, true);
+        checkbox(g, "Нет на месте", 1020, 31, afk, true);
         g.fill(842, 56, 1173, 74, 0xFF07100E);
         border(g, 842, 56, 331, 18, BORDER);
         String name = Minecraft.getInstance().player == null ? "Игрок" : Minecraft.getInstance().player.getName().getString();
@@ -299,9 +317,10 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         button(g, "ЧАТ", 842, 388, 160, 20, true, inside(mx, my, 842, 388, 1002, 408));
         button(g, "ЖУРНАЛ СЕРВЕРА", 1007, 388, 166, 20, false, inside(mx, my, 1007, 388, 1173, 408));
         panel(g, 842, 412, 197, 177);
-        text(g, "[19:43] Игрок присоединился к серверу.", 849, 421, 0xFF91EF9B);
-        text(g, "[19:44] Настройки панели загружены.", 849, 436, 0xFF91EF9B);
-        text(g, "[19:45] Выбрана: " + fit(PanelSettings.SUBMARINES.get(settings.submarine), 95), 849, 451, 0xFF91EF9B);
+        text(g, fit("[19:43] Игрок присоединился к серверу.", 180), 849, 421, 0xFF91EF9B);
+        text(g, fit("[19:44] Настройки панели загружены.", 180), 849, 436, 0xFF91EF9B);
+        text(g, fit("[19:45] Выбрана: " + PanelSettings.SUBMARINES.get(settings.submarine), 180),
+                849, 451, 0xFF91EF9B);
         panel(g, 1044, 412, 129, 177);
         text(g, name, 1052, 421, TEXT);
         g.fill(842, 594, 331 + 842, 613, 0xFF07100E);
@@ -310,7 +329,6 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         checkbox(g, "Автоматический перезапуск", 620, 645, settings.autoRestart, editable);
         checkbox(g, "Готовы начать", 842, 645, ready, true);
         button(g, "НАЧАТЬ", 1038, 641, 147, 25, ready, inside(mx, my, 1038, 641, 1185, 666));
-        button(g, "ОТКЛЮЧИТЬСЯ", 15, 641, 120, 25, true, inside(mx, my, 15, 641, 135, 666));
     }
 
     private void drawProfessionIcon(GuiGraphics g, int x, int y, int selected) {
@@ -468,6 +486,8 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             if (inside(x, y, 700, 250, 800, 272) || !inside(x, y, 385, 130, 815, 280)) loadoutPopup = false;
             return true;
         }
+        double rawY = y;
+        y += MAIN_SHIFT;
         for (int i = 0; i < MODES.length; i++) {
             int row = i - modeScroll;
             if (row >= 0 && row < 4 && inside(x, y, 21, 117 + row * 54, 253, 165 + row * 54)) {
@@ -547,10 +567,15 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             if (sliderClick(x, y, "skill_death", 557, 566, 140)) return true;
             if (sliderClick(x, y, "skill_immediate", 557, 605, 140)) return true;
         } else {
-            if (sliderClick(x, y, "replacement", 557, 426, 140)) return true;
-            if (inside(x, y, 557, 456, 800, 478)) { edit(() -> settings.botControl = !settings.botControl); return true; }
-            if (inside(x, y, 557, 483, 800, 505)) { edit(() -> settings.ironMan = !settings.ironMan); return true; }
+            for (int row = 0; row < ADVANTAGE_VISIBLE_ROWS && advantageScroll + row < ADVANTAGE_ROWS.length; row++) {
+                String token = ADVANTAGE_ROWS[advantageScroll + row];
+                if (!token.startsWith("#") && inside(x, y, 555, 386 + row * 21, 802, 406 + row * 21)) {
+                    toggleAdvantage(Integer.parseInt(token));
+                    return true;
+                }
+            }
         }
+        y = rawY;
         if (inside(x, y, 843, 28, 980, 50)) { watch = !watch; return true; }
         if (inside(x, y, 1020, 28, 1150, 50)) { afk = !afk; return true; }
         if (inside(x, y, 842, 104, 1173, 354)) { professionPopup = true; return true; }
@@ -563,9 +588,21 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             else ModNetworking.CHANNEL.sendToServer(new PanelPackets.ServerboundStartSession());
             return true;
         }
-        if (inside(x, y, 15, 641, 135, 666)) { onClose(); return true; }
         focus = Focus.NONE;
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private void toggleAdvantage(int index) {
+        if (!editable) {
+            notifyUser("Недостаточно прав для изменения очков преимущества");
+            return;
+        }
+        if (!settings.advantageEnabled[index]
+                && PanelSettings.ADVANTAGE_COSTS.get(index) > settings.advantagePointsRemaining()) {
+            notifyUser("Недостаточно очков преимущества");
+            return;
+        }
+        edit(() -> settings.advantageEnabled[index] = !settings.advantageEnabled[index]);
     }
 
     private boolean sliderClick(double x, double y, String name, int left, int top, int width) {
@@ -611,16 +648,22 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         double x = vx(mouseX), y = vy(mouseY);
+        double contentY = y + MAIN_SHIFT;
         int direction = delta > 0 ? -1 : 1;
-        if (inside(x, y, 270, 110, 540, 350)) {
+        if (inside(x, contentY, 270, 110, 540, 350)) {
             submarineScroll = Mth.clamp(submarineScroll + direction, 0, Math.max(0, filteredSubmarines().size() - 8));
             return true;
         }
-        if (inside(x, y, 15, 376, 265, 634) && settings.gameMode == 1) {
+        if (inside(x, contentY, 15, 376, 265, 634) && settings.gameMode == 1) {
             missionScroll = Mth.clamp(missionScroll + direction, 0, Math.max(0, PanelSettings.MISSIONS.size() - 13));
             return true;
         }
-        if (inside(x, y, 15, 110, 265, 350)) {
+        if (inside(x, contentY, 548, 376, 815, 634) && !respawnTab) {
+            advantageScroll = Mth.clamp(advantageScroll + direction, 0,
+                    Math.max(0, ADVANTAGE_ROWS.length - ADVANTAGE_VISIBLE_ROWS));
+            return true;
+        }
+        if (inside(x, contentY, 15, 110, 265, 350)) {
             modeScroll = Mth.clamp(modeScroll + direction, 0, Math.max(0, MODES.length - 4));
             return true;
         }

@@ -6,6 +6,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 
 abstract class AbstractPanelScreen extends Screen {
@@ -20,6 +21,14 @@ abstract class AbstractPanelScreen extends Screen {
     protected static final int BRIGHT = 0xFFFFFFFF;
     protected static final int ACCENT = 0xFF65C4A8;
     protected static final int DANGER = 0xFFDB6868;
+    /**
+     * The game's "Force Unicode font" option swaps the default font set and changes glyph metrics.
+     * The panel has a dense, coordinate-driven layout, so it deliberately uses the built-in uniform
+     * font resource and its own scale. This keeps Russian text equally readable in both client modes.
+     */
+    protected static final ResourceLocation PANEL_FONT = new ResourceLocation("minecraft", "uniform");
+    protected static final float TEXT_SCALE = 1.10F;
+    protected static final float HEADING_SCALE = 1.22F;
     protected float canvasScale = 1.0F;
     protected float canvasX;
     protected float canvasY;
@@ -68,21 +77,39 @@ abstract class AbstractPanelScreen extends Screen {
     }
 
     protected void text(GuiGraphics graphics, String value, int x, int y, int color) {
-        graphics.drawString(font, value, x, y, color, true);
+        drawScaled(graphics, value, x, y, color, TEXT_SCALE);
     }
 
     protected void centered(GuiGraphics graphics, String value, int x, int y, int color) {
-        graphics.drawCenteredString(font, value, x, y, color);
+        float width = styledWidth(value) * TEXT_SCALE;
+        drawScaled(graphics, value, x - width / 2.0F, y, color, TEXT_SCALE);
     }
 
     protected void heading(GuiGraphics graphics, String value, int x, int y) {
-        text(graphics, value, x, y, BRIGHT);
+        drawScaled(graphics, value, x, y, BRIGHT, HEADING_SCALE);
+    }
+
+    private void drawScaled(GuiGraphics graphics, String value, float x, float y, int color, float scale) {
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, y, 0.0F);
+        graphics.pose().scale(scale, scale, 1.0F);
+        graphics.drawString(font, styled(value), 0, 0, color, true);
+        graphics.pose().popPose();
+    }
+
+    protected Component styled(String value) {
+        return Component.literal(value).withStyle(Style.EMPTY.withFont(PANEL_FONT));
+    }
+
+    protected int styledWidth(String value) {
+        return font.width(styled(value));
     }
 
     protected void button(GuiGraphics graphics, String value, int x, int y, int w, int h, boolean active, boolean hover) {
         graphics.fill(x, y, x + w, y + h, hover ? PANEL_HOVER : 0xFF26312E);
         border(graphics, x, y, w, h, active ? ACCENT : MUTED);
-        centered(graphics, value, x + w / 2, y + (h - 8) / 2, active ? BRIGHT : MUTED);
+        centered(graphics, fit(value, w - 8), x + w / 2,
+                y + Math.max(2, Math.round((h - 8 * TEXT_SCALE) / 2.0F)), active ? BRIGHT : MUTED);
     }
 
     protected void checkbox(GuiGraphics graphics, String value, int x, int y, boolean checked, boolean enabled) {
@@ -147,9 +174,9 @@ abstract class AbstractPanelScreen extends Screen {
     }
 
     protected String fit(String value, int maximumWidth) {
-        if (font.width(value) <= maximumWidth) return value;
+        if (styledWidth(value) * TEXT_SCALE <= maximumWidth) return value;
         String result = value;
-        while (!result.isEmpty() && font.width(result + "…") > maximumWidth) {
+        while (!result.isEmpty() && styledWidth(result + "…") * TEXT_SCALE > maximumWidth) {
             result = result.substring(0, result.length() - 1);
         }
         return result + "…";

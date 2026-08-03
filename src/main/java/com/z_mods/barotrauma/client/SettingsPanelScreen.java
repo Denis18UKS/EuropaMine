@@ -38,6 +38,7 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     private boolean professionPopup;
     private boolean loadoutPopup;
     private boolean enlargedPhoto;
+    private int campaignWarningSubmarine = -1;
     private String notice = "";
     private long noticeUntil;
 
@@ -72,9 +73,23 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             graphics.fill(420, 641, 780, 662, 0xE0192824);
             centered(graphics, notice, 600, 647, BRIGHT);
         }
-        if (professionPopup) drawProfessionPopup(graphics, mx, my);
-        if (loadoutPopup) drawLoadoutPopup(graphics, mx, my);
-        if (enlargedPhoto) drawPhotoPopup(graphics, mx, my);
+        if (professionPopup) {
+            beginModal(graphics, 205);
+            drawProfessionPopup(graphics, mx, my);
+            endModal(graphics);
+        } else if (loadoutPopup) {
+            beginModal(graphics, 205);
+            drawLoadoutPopup(graphics, mx, my);
+            endModal(graphics);
+        } else if (enlargedPhoto) {
+            beginModal(graphics, 238);
+            drawPhotoPopup(graphics, mx, my);
+            endModal(graphics);
+        } else if (campaignWarningSubmarine >= 0) {
+            beginModal(graphics, 215);
+            drawCampaignWarning(graphics, mx, my);
+            endModal(graphics);
+        }
         endCanvas(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -129,10 +144,11 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             boolean selected = settings.submarine == index;
             if (selected) g.fill(276, y - 3, 531, y + 20, 0xFF243B34);
             text(g, PanelSettings.SUBMARINES.get(index), 282, y, selected ? BRIGHT : TEXT);
+            boolean locked = settings.gameMode == 3 && !settings.canUseSubmarine(index);
             text(g, (index % 3 == 0 ? "Транспортная" : index % 3 == 1 ? "Боевая" : "Разведывательная"),
                     446, y + 9, selected ? ACCENT : MUTED);
-            text(g, String.format(Locale.ROOT, "%,d кр.", 5000 + index * 2300), 465, y - 1,
-                    selected ? TEXT : MUTED);
+            text(g, String.format(Locale.ROOT, "%,d кред.", PanelSettings.submarinePrice(index)), 455, y - 1,
+                    locked ? DANGER : selected ? TEXT : MUTED);
         }
         scrollbar(g, 532, 140, 202, submarineScroll, Math.max(0, filtered.size() - 8));
 
@@ -143,7 +159,9 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         heading(g, PanelSettings.SUBMARINES.get(settings.submarine), 557, 247);
         text(g, submarineType(settings.submarine), 557, 264, TEXT);
         text(g, "Цена", 557, 282, TEXT);
-        text(g, String.format(Locale.ROOT, "%,d кредитов", 5000 + settings.submarine * 2300), 690, 282, BRIGHT);
+        boolean selectedLocked = settings.gameMode == 3 && !settings.canUseSubmarine(settings.submarine);
+        text(g, String.format(Locale.ROOT, "%,d кредитов", PanelSettings.submarinePrice(settings.submarine)), 690, 282,
+                selectedLocked ? DANGER : BRIGHT);
         text(g, "Габариты", 557, 297, TEXT);
         text(g, (35 + settings.submarine) + "×" + (9 + settings.submarine % 7) + " м", 690, 297, BRIGHT);
         text(g, "Грузоподъёмность", 557, 312, TEXT);
@@ -153,8 +171,14 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     }
 
     private void drawMissionPanel(GuiGraphics g, double mx, double my) {
-        heading(g, settings.gameMode == 3 ? "НАСТРОЙКИ КАМПАНИИ" : "ТИП МИССИИ", 20, 362);
+        if (settings.gameMode != 0) {
+            heading(g, settings.gameMode == 3 ? "НАСТРОЙКИ КАМПАНИИ" : "ТИП МИССИИ", 20, 362);
+        }
         panel(g, 15, 376, 250, 258);
+        if (settings.gameMode == 0) {
+            // В песочнице нижняя левая область намеренно свободна, как в референсе.
+            return;
+        }
         if (settings.gameMode == 3) {
             button(g, "НОВАЯ КАМПАНИЯ", 21, 383, 113, 20, true, inside(mx, my, 21, 383, 134, 403));
             button(g, "ЗАГРУЗИТЬ", 139, 383, 118, 20, true, inside(mx, my, 139, 383, 257, 403));
@@ -177,6 +201,13 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         }
         button(g, "ВЫБРАТЬ ВСЕ", 21, 383, 112, 20, editable, inside(mx, my, 21, 383, 133, 403));
         button(g, "ОТМЕНИТЬ ВСЕ", 138, 383, 119, 20, editable, inside(mx, my, 138, 383, 257, 403));
+        if (settings.gameMode == 2) {
+            for (int row = 0; row < PanelSettings.PVP_MISSIONS.size(); row++) {
+                checkbox(g, PanelSettings.PVP_MISSIONS.get(row), 23, 411 + row * 24,
+                        settings.pvpMissionEnabled[row], editable);
+            }
+            return;
+        }
         int visible = 13;
         missionScroll = Mth.clamp(missionScroll, 0, Math.max(0, PanelSettings.MISSIONS.size() - visible));
         for (int row = 0; row < visible && missionScroll + row < PanelSettings.MISSIONS.size(); row++) {
@@ -327,11 +358,24 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     }
 
     private void drawPhotoPopup(GuiGraphics g, double mx, double my) {
-        g.fill(0, 0, CANVAS_W, CANVAS_H, 0xD0000000);
         panel(g, 250, 55, 700, 565);
         centered(g, settings.photoNames[settings.submarine], 600, 70, BRIGHT);
         photo(g, ClientPanelPhotos.texture(settings.submarine), 280, 92, 640, 480);
         button(g, "Закрыть", 800, 582, 120, 25, true, inside(mx, my, 800, 582, 920, 607));
+    }
+
+    private void drawCampaignWarning(GuiGraphics g, double mx, double my) {
+        int index = Mth.clamp(campaignWarningSubmarine, 0, PanelSettings.SUBMARINES.size() - 1);
+        panel(g, 375, 205, 450, 250);
+        heading(g, "ВНИМАНИЕ", 405, 230);
+        centered(g, PanelSettings.SUBMARINES.get(index), 600, 257, BRIGHT);
+        centered(g, String.format(Locale.ROOT, "Стоимость: %,d кред.", PanelSettings.submarinePrice(index)),
+                600, 280, DANGER);
+        centered(g, "Эта подлодка не куплена и слишком дорога", 600, 310, TEXT);
+        centered(g, "для выбранного начального баланса.", 600, 329, TEXT);
+        centered(g, "Начальный баланс: " + settings.startingBalanceCredits() + " кред.", 600, 352, BRIGHT);
+        centered(g, "Выберите купленную подлодку с обычной ценой.", 600, 371, TEXT);
+        button(g, "ПОНЯТНО", 520, 405, 160, 33, true, inside(mx, my, 520, 405, 680, 438));
     }
 
     private void field(GuiGraphics g, String label, String value, int x, int y, int w, Focus field) {
@@ -397,6 +441,12 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         double x = vx(mouseX), y = vy(mouseY);
         if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
+        if (campaignWarningSubmarine >= 0) {
+            if (inside(x, y, 520, 405, 680, 438) || !inside(x, y, 375, 205, 825, 455)) {
+                campaignWarningSubmarine = -1;
+            }
+            return true;
+        }
         if (enlargedPhoto) {
             if (inside(x, y, 800, 582, 920, 607) || !inside(x, y, 250, 55, 950, 620)) enlargedPhoto = false;
             return true;
@@ -421,7 +471,15 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         for (int i = 0; i < MODES.length; i++) {
             int row = i - modeScroll;
             if (row >= 0 && row < 4 && inside(x, y, 21, 117 + row * 54, 253, 165 + row * 54)) {
-                final int mode = i; edit(() -> settings.gameMode = mode); return true;
+                final int mode = i;
+                edit(() -> {
+                    settings.gameMode = mode;
+                    if (mode == 3 && !settings.canUseSubmarine(settings.submarine)) {
+                        settings.submarine = settings.firstPurchasedSubmarine();
+                    }
+                });
+                missionScroll = 0;
+                return true;
             }
         }
         if (inside(x, y, 276, 116, 534, 134)) { focus = Focus.SEARCH; return true; }
@@ -429,7 +487,12 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         for (int row = 0; row < 8 && submarineScroll + row < filtered.size(); row++) {
             if (inside(x, y, 276, 138 + row * 24, 531, 162 + row * 24)) {
                 int selected = filtered.get(submarineScroll + row);
-                edit(() -> settings.submarine = selected); return true;
+                if (settings.gameMode == 3 && !settings.canUseSubmarine(selected)) {
+                    campaignWarningSubmarine = selected;
+                } else {
+                    edit(() -> settings.submarine = selected);
+                }
+                return true;
             }
         }
         if (inside(x, y, 782, 201, 804, 222)) { enlargedPhoto = true; return true; }
@@ -442,13 +505,23 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             if (inside(x, y, 142, 566, 237, 586)) { edit(() -> settings.startingBalance = (settings.startingBalance + 1) % 3); return true; }
             if (inside(x, y, 140, 593, 170, 625)) { edit(() -> settings.maxMissionsPerRound--); return true; }
             if (inside(x, y, 220, 593, 250, 625)) { edit(() -> settings.maxMissionsPerRound++); return true; }
-        } else {
+        } else if (settings.gameMode == 1) {
             if (inside(x, y, 21, 383, 133, 403)) { edit(() -> java.util.Arrays.fill(settings.missionEnabled, true)); return true; }
             if (inside(x, y, 138, 383, 257, 403)) { edit(() -> java.util.Arrays.fill(settings.missionEnabled, false)); return true; }
             for (int row = 0; row < 13 && missionScroll + row < settings.missionEnabled.length; row++) {
                 if (inside(x, y, 21, 408 + row * 16, 252, 424 + row * 16)) {
                     int index = missionScroll + row;
                     edit(() -> settings.missionEnabled[index] = !settings.missionEnabled[index]); return true;
+                }
+            }
+        } else if (settings.gameMode == 2) {
+            if (inside(x, y, 21, 383, 133, 403)) { edit(() -> java.util.Arrays.fill(settings.pvpMissionEnabled, true)); return true; }
+            if (inside(x, y, 138, 383, 257, 403)) { edit(() -> java.util.Arrays.fill(settings.pvpMissionEnabled, false)); return true; }
+            for (int row = 0; row < settings.pvpMissionEnabled.length; row++) {
+                if (inside(x, y, 21, 408 + row * 24, 252, 430 + row * 24)) {
+                    int index = row;
+                    edit(() -> settings.pvpMissionEnabled[index] = !settings.pvpMissionEnabled[index]);
+                    return true;
                 }
             }
         }
@@ -543,7 +616,7 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             submarineScroll = Mth.clamp(submarineScroll + direction, 0, Math.max(0, filteredSubmarines().size() - 8));
             return true;
         }
-        if (inside(x, y, 15, 376, 265, 634) && settings.gameMode != 3) {
+        if (inside(x, y, 15, 376, 265, 634) && settings.gameMode == 1) {
             missionScroll = Mth.clamp(missionScroll + direction, 0, Math.max(0, PanelSettings.MISSIONS.size() - 13));
             return true;
         }

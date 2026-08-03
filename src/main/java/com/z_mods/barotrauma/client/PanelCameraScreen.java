@@ -37,8 +37,15 @@ public final class PanelCameraScreen extends AbstractPanelScreen {
         drawGallery(graphics, mx, my);
         drawEditor(graphics, mx, my);
         button(graphics, "Закрыть", 1030, 625, 135, 28, true, inside(mx, my, 1030, 625, 1165, 653));
-        if (confirmDeleteAll) drawDeleteConfirmation(graphics, mx, my);
-        if (enlarged) drawEnlarged(graphics, mx, my);
+        if (confirmDeleteAll) {
+            beginModal(graphics, 225);
+            drawDeleteConfirmation(graphics, mx, my);
+            endModal(graphics);
+        } else if (enlarged) {
+            beginModal(graphics, 245);
+            drawEnlarged(graphics, mx, my);
+            endModal(graphics);
+        }
         endCanvas(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -83,7 +90,6 @@ public final class PanelCameraScreen extends AbstractPanelScreen {
     }
 
     private void drawDeleteConfirmation(GuiGraphics g, double mx, double my) {
-        g.fill(0, 0, CANVAS_W, CANVAS_H, 0xB0000000);
         panel(g, 415, 235, 370, 160);
         centered(g, "Удалить все 12 фотографий?", 600, 262, BRIGHT);
         centered(g, "Отменить это действие будет нельзя.", 600, 286, DANGER);
@@ -92,7 +98,6 @@ public final class PanelCameraScreen extends AbstractPanelScreen {
     }
 
     private void drawEnlarged(GuiGraphics g, double mx, double my) {
-        g.fill(0, 0, CANVAS_W, CANVAS_H, 0xD8000000);
         panel(g, 190, 35, 820, 605);
         centered(g, settings.photoNames[selected], 600, 52, BRIGHT);
         photo(g, ClientPanelPhotos.texture(selected), 220, 78, 760, 510);

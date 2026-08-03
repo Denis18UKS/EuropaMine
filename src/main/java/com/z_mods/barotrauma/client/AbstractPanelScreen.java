@@ -1,5 +1,6 @@
 package com.z_mods.barotrauma.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -10,12 +11,12 @@ import net.minecraft.resources.ResourceLocation;
 abstract class AbstractPanelScreen extends Screen {
     protected static final int CANVAS_W = 1200;
     protected static final int CANVAS_H = 675;
-    protected static final int BG = 0xF20A1211;
-    protected static final int PANEL = 0xE6080D0C;
-    protected static final int PANEL_HOVER = 0xE71C302A;
-    protected static final int BORDER = 0xFF6FA994;
-    protected static final int MUTED = 0xFF65716C;
-    protected static final int TEXT = 0xFFE9E4B6;
+    protected static final int BG = 0xFF07100E;
+    protected static final int PANEL = 0xFF050A09;
+    protected static final int PANEL_HOVER = 0xFF27443B;
+    protected static final int BORDER = 0xFF8AD6BE;
+    protected static final int MUTED = 0xFF9AA9A3;
+    protected static final int TEXT = 0xFFFFF6C8;
     protected static final int BRIGHT = 0xFFFFFFFF;
     protected static final int ACCENT = 0xFF65C4A8;
     protected static final int DANGER = 0xFFDB6868;
@@ -67,7 +68,7 @@ abstract class AbstractPanelScreen extends Screen {
     }
 
     protected void text(GuiGraphics graphics, String value, int x, int y, int color) {
-        graphics.drawString(font, value, x, y, color, false);
+        graphics.drawString(font, value, x, y, color, true);
     }
 
     protected void centered(GuiGraphics graphics, String value, int x, int y, int color) {
@@ -111,8 +112,26 @@ abstract class AbstractPanelScreen extends Screen {
     }
 
     protected void photo(GuiGraphics graphics, ResourceLocation texture, int x, int y, int w, int h) {
+        graphics.fill(x, y, x + w, y + h, 0xFF020403);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         graphics.blit(texture, x, y, 0, 0, w, h, w, h);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         border(graphics, x, y, w, h, BORDER);
+    }
+
+    /** Flushes lower GUI layers before a modal is painted, preventing delayed font batches from bleeding through. */
+    protected void beginModal(GuiGraphics graphics, int alpha) {
+        graphics.flush();
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, 500.0F);
+        graphics.fill(0, 0, CANVAS_W, CANVAS_H, (alpha & 0xFF) << 24);
+    }
+
+    protected void endModal(GuiGraphics graphics) {
+        graphics.flush();
+        graphics.pose().popPose();
     }
 
     protected void drawPlayerHead(GuiGraphics graphics, int x, int y, int size) {

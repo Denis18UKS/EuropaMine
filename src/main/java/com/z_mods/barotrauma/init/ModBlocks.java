@@ -3,6 +3,7 @@ package com.z_mods.barotrauma.init;
 import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.blocks.NavigationTerminal;
 import com.z_mods.barotrauma.blocks.SimpleHorizontalBlock;
+import com.z_mods.barotrauma.blocks.SettingsPanelBlock;
 import com.z_mods.barotrauma.blocks.VentDeco;
 import com.z_mods.barotrauma.blocks.VentDecoInt;
 import net.minecraft.world.item.BlockItem;
@@ -28,6 +29,9 @@ public class ModBlocks {
 
     public static final RegistryObject<Block> NAVIGATION_TERMINAL = registerBlock("navigation_terminal",
             NavigationTerminal::new);
+
+    public static final RegistryObject<Block> SETTINGS_PANEL = registerBlock("settings_panel",
+            SettingsPanelBlock::new);
 
     public static final RegistryObject<Block> BEDS = registerBlock("beds",
             () -> new SimpleHorizontalBlock(box(-4, 0, 0, 32, 32, 16)));

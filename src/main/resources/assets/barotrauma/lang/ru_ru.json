@@ -34,5 +34,14 @@
     "creativetab.barotrauma_tools_tab": "\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u044b Barotrauma",
     "key.categories.barotrauma": "Barotrauma",
     "key.barotrauma.structure_configurator": "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u0449\u0438\u043a \u0441\u0442\u0440\u0443\u043a\u0442\u0443\u0440",
-    "container.vent": "\u041f\u0440\u0438\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0446\u0438\u044f"
+    "container.vent": "\u041f\u0440\u0438\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0446\u0438\u044f",
+    "block.barotrauma.settings_panel": "Панель настроек сервера",
+    "item.barotrauma.panel_camera": "Фотокамера панели",
+    "screen.barotrauma.settings_panel": "Настройки сервера",
+    "screen.barotrauma.panel_camera": "Галерея панели",
+    "message.barotrauma.panel_obstructed": "Для панели требуется свободная область 7×4 блока",
+    "message.barotrauma.photo_saved": "Фотография для ячейки %s сохранена",
+    "message.barotrauma.photo_failed": "Не удалось сделать фотографию",
+    "message.barotrauma.not_enough_players": "Для запуска требуется минимум игроков: %s",
+    "message.barotrauma.session_started": "Сессия запущена. Выбрана подлодка: %s"
 }

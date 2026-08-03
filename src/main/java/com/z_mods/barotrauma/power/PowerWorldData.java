@@ -180,7 +180,7 @@ public final class PowerWorldData extends SavedData {
                     4, 0.28D, 0.2D, 0.28D, 0.015D);
         }
         if (ticks % 30L == 0L) {
-            level.playSound(null, pos, SoundEvents.NOTE_BLOCK_BELL, SoundSource.BLOCKS,
+            level.playSound(null, pos, SoundEvents.NOTE_BLOCK_BELL.get(), SoundSource.BLOCKS,
                     1.4F, state.overfuelCountdown > 0 ? 0.55F : 0.8F);
         }
     }

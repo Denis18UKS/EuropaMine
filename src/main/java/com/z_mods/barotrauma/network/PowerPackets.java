@@ -235,10 +235,17 @@ public final class PowerPackets {
             }
             return;
         }
+
+        boolean alreadyHasFuel = state.hasFuel();
         ItemStack rod = player.getInventory().getItem(inventorySlot);
         int remaining = Math.max(1, rod.getMaxDamage() - rod.getDamageValue());
         consumeFuelRod(player, inventorySlot);
         state.setFuel(slot, remaining);
+        if (alreadyHasFuel) {
+            state.triggerOverfuel();
+            player.displayClientMessage(Component.literal(
+                    "ОПАСНОСТЬ: в реактор загружено больше одного топливного стержня!"), true);
+        }
     }
 
     private static void extractFuel(ServerPlayer player, PowerWorldData.MachineState state, int rawSlot) {

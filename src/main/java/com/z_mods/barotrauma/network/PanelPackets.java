@@ -13,6 +13,8 @@ import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 public final class PanelPackets {
     private PanelPackets() {
@@ -62,6 +64,19 @@ public final class PanelPackets {
         }
         public static void handle(ClientboundPhoto packet, Supplier<NetworkEvent.Context> supplier) {
             client(supplier, () -> ClientPacketHandlers.applyPhoto(packet.slot, packet.png));
+        }
+    }
+
+    public record ClientboundPanelChat(String line, boolean clear) {
+        public static void encode(ClientboundPanelChat packet, FriendlyByteBuf buffer) {
+            buffer.writeUtf(packet.line, 256);
+            buffer.writeBoolean(packet.clear);
+        }
+        public static ClientboundPanelChat decode(FriendlyByteBuf buffer) {
+            return new ClientboundPanelChat(buffer.readUtf(256), buffer.readBoolean());
+        }
+        public static void handle(ClientboundPanelChat packet, Supplier<NetworkEvent.Context> supplier) {
+            client(supplier, () -> ClientPacketHandlers.applyPanelChat(packet.line, packet.clear));
         }
     }
 
@@ -127,6 +142,38 @@ public final class PanelPackets {
                 }
             });
             context.setPacketHandled(true);
+        }
+    }
+
+    public record ServerboundPanelChat(String message) {
+        private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+
+        public static void encode(ServerboundPanelChat packet, FriendlyByteBuf buffer) {
+            buffer.writeUtf(packet.message, 160);
+        }
+        public static ServerboundPanelChat decode(FriendlyByteBuf buffer) {
+            return new ServerboundPanelChat(buffer.readUtf(160));
+        }
+        public static void handle(ServerboundPanelChat packet, Supplier<NetworkEvent.Context> supplier) {
+            NetworkEvent.Context context = supplier.get();
+            context.enqueueWork(() -> {
+                ServerPlayer player = context.getSender();
+                if (player == null) return;
+                String message = cleanChat(packet.message);
+                if (message.isBlank()) return;
+                String line = "[" + LocalTime.now().format(TIME) + "] "
+                        + player.getGameProfile().getName() + ": " + message;
+                PanelSettingsSavedData.get(player.server).addChatLine(line);
+                PanelNetworkSync.broadcastChat(player.server, line);
+                player.server.getPlayerList().broadcastSystemMessage(Component.literal(line), false);
+            });
+            context.setPacketHandled(true);
+        }
+
+        private static String cleanChat(String value) {
+            if (value == null) return "";
+            String cleaned = value.replaceAll("[\\p{Cntrl}]", "").strip();
+            return cleaned.substring(0, Math.min(160, cleaned.length()));
         }
     }
 

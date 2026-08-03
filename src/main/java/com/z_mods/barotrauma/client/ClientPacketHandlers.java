@@ -32,4 +32,8 @@ public final class ClientPacketHandlers {
     public static void applyPhoto(int slot, byte[] png) {
         ClientPanelPhotos.apply(slot, png);
     }
+
+    public static void applyPanelChat(String line, boolean clear) {
+        ClientPanelChat.apply(line, clear);
+    }
 }

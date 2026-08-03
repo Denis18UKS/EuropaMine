@@ -27,6 +27,7 @@ public final class PanelSettings {
             "Сопровождение", "Спасение заброшенного аванпоста", "Уничтожить таламуса", "Чудовище");
     public static final List<String> PVP_MISSIONS = List.of(
             "Бой за аванпост", "Подлодка на подлодку", "Царь корпуса");
+    public static final List<String> RESPAWN_SHUTTLES = List.of("Хемуль", "Шелки", "Венчур");
     public static final List<String> ADVANTAGES = List.of(
             "Малый калибр", "Усмирение", "Ближний бой", "Дальний бой",
             "Базовое", "Комплект мобильности", "Абордажные комплекты",
@@ -52,6 +53,7 @@ public final class PanelSettings {
     public int minimumPlayers = 1;
     public int respawnMode;
     public boolean respawnShuttle = true;
+    public int respawnShuttleType;
     public int respawnInterval = 10;
     public int respawnThreshold = 100;
     public int respawnWindow = 10;
@@ -92,6 +94,7 @@ public final class PanelSettings {
         maxDanger = Mth.clamp(maxDanger, 0, 3);
         minimumPlayers = Mth.clamp(minimumPlayers, 1, 32);
         respawnMode = Mth.clamp(respawnMode, 0, 2);
+        respawnShuttleType = Mth.clamp(respawnShuttleType, 0, RESPAWN_SHUTTLES.size() - 1);
         respawnInterval = Mth.clamp(respawnInterval, 10, 300);
         respawnThreshold = Mth.clamp(respawnThreshold, 10, 100);
         respawnWindow = Mth.clamp(respawnWindow, 1, 30);
@@ -142,6 +145,7 @@ public final class PanelSettings {
         tag.putInt("MinimumPlayers", minimumPlayers);
         tag.putInt("RespawnMode", respawnMode);
         tag.putBoolean("RespawnShuttle", respawnShuttle);
+        tag.putInt("RespawnShuttleType", respawnShuttleType);
         tag.putInt("RespawnInterval", respawnInterval);
         tag.putInt("RespawnThreshold", respawnThreshold);
         tag.putInt("RespawnWindow", respawnWindow);
@@ -191,6 +195,7 @@ public final class PanelSettings {
         value.minimumPlayers = tag.getInt("MinimumPlayers");
         value.respawnMode = tag.getInt("RespawnMode");
         value.respawnShuttle = tag.getBoolean("RespawnShuttle");
+        value.respawnShuttleType = tag.getInt("RespawnShuttleType");
         value.respawnInterval = tag.getInt("RespawnInterval");
         value.respawnThreshold = tag.getInt("RespawnThreshold");
         value.respawnWindow = tag.getInt("RespawnWindow");

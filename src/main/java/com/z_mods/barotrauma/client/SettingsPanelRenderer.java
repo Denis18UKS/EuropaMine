@@ -6,7 +6,6 @@ import com.mojang.math.Axis;
 import com.z_mods.barotrauma.blocks.SettingsPanelBlock;
 import com.z_mods.barotrauma.blocks.SettingsPanelBlockEntity;
 import com.z_mods.barotrauma.panel.PanelSettings;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -15,7 +14,10 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 
 /** Full-bright, always visible summary painted over the physical 7x4 panel. */
 public final class SettingsPanelRenderer implements BlockEntityRenderer<SettingsPanelBlockEntity> {
@@ -37,56 +39,78 @@ public final class SettingsPanelRenderer implements BlockEntityRenderer<Settings
                 0.5D + right.getStepZ() * 3.0D);
         poses.translate(facing.getStepX() * 0.506D, 0.0D, facing.getStepZ() * 0.506D);
         poses.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
-        poses.scale(0.029F, -0.029F, 0.029F);
+        // A wider logical canvas and a fixed uniform font keep the physical panel identical with
+        // "Force Unicode font" enabled or disabled. NORMAL/POLYGON_OFFSET also prevents text from
+        // bleeding through the enlarged photo or distant blocks.
+        poses.scale(0.020F, -0.020F, 0.020F);
 
-        drawCentered(poses, buffers, "НАСТРОЙКИ СЕРВЕРА", 0, -64, 0xFFFFFFFF);
-        drawCentered(poses, buffers, modeName(settings.gameMode), -79, -50, 0xFFFFF1A6);
-        drawCentered(poses, buffers, PanelSettings.SUBMARINES.get(settings.submarine), 0, -50, 0xFFFFF1A6);
-        drawCentered(poses, buffers, "ИГРОКИ: " + settings.minimumPlayers + "+", 79, -50, 0xFFFFF1A6);
+        drawPhoto(poses, buffers, ClientPanelPhotos.texture(settings.submarine), -43, -48, 43, 12);
+        drawCentered(poses, buffers, "НАСТРОЙКИ СЕРВЕРА", 0, -86, 0xFFFFFFFF, 220);
+        drawCentered(poses, buffers, modeName(settings.gameMode), -106, -68, 0xFFFFF1A6, 90);
+        drawCentered(poses, buffers, PanelSettings.SUBMARINES.get(settings.submarine), 0, -68, 0xFFFFF1A6, 98);
+        drawCentered(poses, buffers, "ИГРОКИ: " + settings.minimumPlayers + "+", 106, -68, 0xFFFFF1A6, 90);
 
-        drawText(poses, buffers, "РЕЖИМ", -111, -36, 0xFF8AD6BE);
-        drawText(poses, buffers, modeName(settings.gameMode), -111, -24, 0xFFFFFFFF);
-        drawText(poses, buffers, missionSummary(settings), -111, -12, 0xFFFFF6C8);
-        drawText(poses, buffers, "Сложность: " + settings.difficulty + "%", -111, 0, 0xFFFFFFFF);
-        drawText(poses, buffers, "Боты: " + settings.botCount, -111, 12, 0xFFFFFFFF);
-        drawText(poses, buffers, "Предатели: " + settings.betrayalChance + "%", -111, 24, 0xFFFFFFFF);
-        drawText(poses, buffers, "Мин. игроков: " + settings.minimumPlayers, -111, 36, 0xFFFFFFFF);
-        drawText(poses, buffers, settings.autoRestart ? "Автоперезапуск: ДА" : "Автоперезапуск: НЕТ",
-                -111, 49, settings.autoRestart ? 0xFF7FFFD4 : 0xFFBCC6C1);
+        drawText(poses, buffers, "РЕЖИМ", -157, -48, 0xFF8AD6BE, 100);
+        drawText(poses, buffers, modeName(settings.gameMode), -157, -31, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, missionSummary(settings), -157, -14, 0xFFFFF6C8, 100);
+        drawText(poses, buffers, "Сложность: " + settings.difficulty + "%", -157, 3, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Боты: " + settings.botCount, -157, 20, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Предатели: " + settings.betrayalChance + "%", -157, 37, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Игроков: " + settings.minimumPlayers, -157, 54, 0xFFFFFFFF, 100);
 
-        drawPhoto(poses, buffers, ClientPanelPhotos.texture(settings.submarine), -35, -37, 35, 15);
         drawCentered(poses, buffers, "Цена: " + PanelSettings.submarinePrice(settings.submarine) + " кред.",
-                0, 20, settings.canUseSubmarine(settings.submarine) ? 0xFFFFFFFF : 0xFFFF6F6F);
-        drawCentered(poses, buffers, "Зона: " + zoneName(settings.naturalZone), 0, 33, 0xFFFFF6C8);
-        drawCentered(poses, buffers, settings.gameMode == 3 ? "Кампания: " + settings.saveName : "Шифр: " + settings.levelSeed,
-                0, 46, 0xFFFFFFFF);
+                0, 21, settings.canUseSubmarine(settings.submarine) ? 0xFFFFFFFF : 0xFFFF6F6F, 108);
+        drawCentered(poses, buffers, "Зона: " + zoneName(settings.naturalZone), 0, 39, 0xFFFFF6C8, 108);
+        drawCentered(poses, buffers,
+                settings.gameMode == 3 ? "Кампания: " + settings.saveName : "Шифр: " + settings.levelSeed,
+                0, 57, 0xFFFFFFFF, 108);
 
-        drawText(poses, buffers, "ВОЗРОЖДЕНИЕ", 43, -36, 0xFF8AD6BE);
-        drawText(poses, buffers, respawnName(settings.respawnMode), 43, -24, 0xFFFFFFFF);
-        drawText(poses, buffers, "Интервал: " + settings.respawnInterval + " с", 43, -12, 0xFFFFFFFF);
-        drawText(poses, buffers, "Порог: " + settings.respawnThreshold + "%", 43, 0, 0xFFFFFFFF);
-        drawText(poses, buffers, "Окно: " + settings.respawnWindow + " мин", 43, 12, 0xFFFFFFFF);
-        drawText(poses, buffers, "Потеря навыка: " + settings.skillLossDeath + "%", 43, 24, 0xFFFFFFFF);
-        drawText(poses, buffers, "Замена: " + settings.replacementCost + "%", 43, 36, 0xFFFFFFFF);
-        drawText(poses, buffers, settings.ironMan ? "ЖЕЛЕЗНЫЙ ЧЕЛОВЕК" : "Обычные правила",
-                43, 49, settings.ironMan ? 0xFFFF7A7A : 0xFF7FFFD4);
+        drawText(poses, buffers, "ВОЗРОЖДЕНИЕ", 57, -48, 0xFF8AD6BE, 100);
+        drawText(poses, buffers, respawnName(settings.respawnMode), 57, -31, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Интервал: " + settings.respawnInterval + " с", 57, -14, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Порог: " + settings.respawnThreshold + "%", 57, 3, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Окно: " + settings.respawnWindow + " мин", 57, 20, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Потеря: " + settings.skillLossDeath + "%", 57, 37, 0xFFFFFFFF, 100);
+        drawText(poses, buffers, "Замена: " + settings.replacementCost + "%", 57, 54, 0xFFFFFFFF, 100);
+
+        drawCentered(poses, buffers, settings.autoRestart ? "АВТОПЕРЕЗАПУСК: ДА" : "АВТОПЕРЕЗАПУСК: НЕТ",
+                -82, 77, settings.autoRestart ? 0xFF7FFFD4 : 0xFFBCC6C1, 145);
+        drawCentered(poses, buffers, settings.ironMan ? "ЖЕЛЕЗНЫЙ ЧЕЛОВЕК" : "ОБЫЧНЫЕ ПРАВИЛА",
+                82, 77, settings.ironMan ? 0xFFFF7A7A : 0xFF7FFFD4, 145);
         poses.popPose();
     }
 
-    private void drawText(PoseStack poses, MultiBufferSource buffers, String text, float x, float y, int color) {
-        font.drawInBatch(text, x, y, color, true,
-                poses.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0, LightTexture.FULL_BRIGHT);
+    private void drawText(PoseStack poses, MultiBufferSource buffers, String text, float x, float y, int color,
+                          int maximumWidth) {
+        FormattedCharSequence line = fixed(fit(text, maximumWidth));
+        font.drawInBatch(line, x, y, color, true,
+                poses.last().pose(), buffers, Font.DisplayMode.POLYGON_OFFSET, 0, LightTexture.FULL_BRIGHT);
     }
 
-    private void drawCentered(PoseStack poses, MultiBufferSource buffers, String text, float x, float y, int color) {
-        font.drawInBatch(text, x - font.width(text) / 2.0F, y, color, true,
-                poses.last().pose(), buffers, Font.DisplayMode.SEE_THROUGH, 0, LightTexture.FULL_BRIGHT);
+    private void drawCentered(PoseStack poses, MultiBufferSource buffers, String text, float x, float y, int color,
+                              int maximumWidth) {
+        FormattedCharSequence line = fixed(fit(text, maximumWidth));
+        font.drawInBatch(line, x - font.width(line) / 2.0F, y, color, true,
+                poses.last().pose(), buffers, Font.DisplayMode.POLYGON_OFFSET, 0, LightTexture.FULL_BRIGHT);
+    }
+
+    private FormattedCharSequence fixed(String text) {
+        return Component.literal(text).withStyle(Style.EMPTY.withFont(AbstractPanelScreen.PANEL_FONT)).getVisualOrderText();
+    }
+
+    private String fit(String text, int maximumWidth) {
+        if (font.width(fixed(text)) <= maximumWidth) return text;
+        String result = text;
+        while (!result.isEmpty() && font.width(fixed(result + "…")) > maximumWidth) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result + "…";
     }
 
     private static String modeName(int mode) {
         return switch (mode) {
             case 0 -> "ПЕСОЧНИЦА";
-            case 2 -> "PVP";
+            case 2 -> "ПРОТИВ ИГРОКА";
             case 3 -> "КАМПАНИЯ";
             default -> "МИССИЯ";
         };
@@ -95,7 +119,7 @@ public final class SettingsPanelRenderer implements BlockEntityRenderer<Settings
     private static String missionSummary(PanelSettings settings) {
         return switch (settings.gameMode) {
             case 0 -> "Без обязательных миссий";
-            case 2 -> "PVP-задач: " + count(settings.pvpMissionEnabled);
+            case 2 -> "Задач: " + count(settings.pvpMissionEnabled);
             case 3 -> "Кампания";
             default -> "Миссий: " + count(settings.missionEnabled);
         };

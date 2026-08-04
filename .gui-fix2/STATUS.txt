@@ -1,0 +1,1 @@
+WIP: native-scale layout and reference-aligned reactor/electrical panel assets are being staged here. No gameplay code is in scope.

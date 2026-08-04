@@ -3,7 +3,11 @@ package com.z_mods.barotrauma.power;
 import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.item.GuiBinderItem;
+import com.z_mods.barotrauma.item.NavigationLinkerItem;
+import com.z_mods.barotrauma.item.SubmarineBuilderItem;
 import com.z_mods.barotrauma.item.WireToolItem;
+import com.z_mods.barotrauma.navigation.NavigationSystem;
+import com.z_mods.barotrauma.navigation.NavigationWorldData;
 import com.z_mods.barotrauma.network.PanelNetworkSync;
 import com.z_mods.barotrauma.network.PowerPackets;
 import net.minecraft.core.BlockPos;
@@ -32,7 +36,7 @@ public final class PowerSystem {
             new GuiEntry(PowerWorldData.ELECTRICAL_PANEL_GUI, "Электрощиток"),
             new GuiEntry("settings_panel", "Панель настроек игры"),
             new GuiEntry("vent", "Интерактивная вентиляция"),
-            new GuiEntry("navigation_terminal", "Навигационный терминал"),
+            new GuiEntry(NavigationWorldData.NAVIGATION_GUI, "Навигационный терминал"),
             new GuiEntry("structure_config", "Настройка конструкции")
     );
 
@@ -54,7 +58,8 @@ public final class PowerSystem {
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof ServerPlayer player)) return;
         ItemStack held = event.getItemStack();
-        if (held.getItem() instanceof GuiBinderItem || held.getItem() instanceof WireToolItem) return;
+        if (held.getItem() instanceof GuiBinderItem || held.getItem() instanceof WireToolItem
+                || held.getItem() instanceof NavigationLinkerItem || held.getItem() instanceof SubmarineBuilderItem) return;
 
         BlockPos pos = event.getPos();
         String guiId = PowerWorldData.get(level).guiAt(pos);
@@ -83,7 +88,8 @@ public final class PowerSystem {
                 PowerPackets.sendOpenMachine(player, pos, guiId, false);
             }
             case "settings_panel" -> PanelNetworkSync.openSettings(player);
-            case "vent", "navigation_terminal", "structure_config" -> openNativeBlockGui(player, level, pos, hit);
+            case NavigationWorldData.NAVIGATION_GUI -> NavigationSystem.open(player, level, pos);
+            case "vent", "structure_config" -> openNativeBlockGui(player, level, pos, hit);
             default -> player.displayClientMessage(Component.literal("Неизвестный GUI: " + guiId), true);
         }
     }

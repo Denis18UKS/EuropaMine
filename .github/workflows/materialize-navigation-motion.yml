@@ -30,7 +30,13 @@ jobs:
             exit 0
           fi
 
+          for file in .nav-motion-fix/part*; do
+            printf '%s %s ' "$file" "$(wc -c < "$file")"
+            git hash-object "$file"
+          done
+
           cat .nav-motion-fix/part* | tr -d '\r\n' | base64 --decode > /tmp/navigation-motion-sonar-overlay.zip
+          sha256sum /tmp/navigation-motion-sonar-overlay.zip
           echo "c56519a375f12cefc51abb4ec294b0617d73b537876d5f40e914ac0b0dc99f82  /tmp/navigation-motion-sonar-overlay.zip" | sha256sum -c -
           unzip -oq /tmp/navigation-motion-sonar-overlay.zip -d .
           rm -rf .nav-motion-fix

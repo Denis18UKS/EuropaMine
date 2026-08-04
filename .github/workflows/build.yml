@@ -1,69 +1,61 @@
-name: Материализация исходников навигационного терминала
+name: Сборка Forge 1.20.1
 
 on:
   push:
-    branches:
-      - codex/navigation-source-files-fix
   pull_request:
   workflow_dispatch:
 
 jobs:
-  materialize:
+  build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
-      - name: Получить ветку
+      - name: Получить исходники
         uses: actions/checkout@v4
-        with:
-          ref: codex/navigation-source-files-fix
-          fetch-depth: 0
 
-      - name: Добавить реальные исходники
+      - name: Установить Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Проверить исходники навигационного терминала
         shell: bash
         run: |
           set -euo pipefail
-          {
-            cat .navigation-assets/navigation-overlay.part000
-            cat .navigation-assets/navigation-overlay.part001
-            cat .navigation-assets/navigation-overlay-fix002.part*
-            cat .navigation-assets/navigation-overlay.part003
-            cat .navigation-assets/navigation-overlay.part004
-            cat .navigation-assets/navigation-overlay.part005
-            cat .navigation-assets/navigation-overlay.part006
-            cat .navigation-assets/navigation-overlay.part007
-            cat .navigation-assets/navigation-overlay.part008
-            cat .navigation-assets/navigation-overlay.part009
-            cat .navigation-assets/navigation-overlay.part010
-            cat .navigation-assets/navigation-overlay.part011
-          } | tr -d '\r\n' | base64 --decode > /tmp/navigation-terminal-overlay.zip
+          test -f src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java
+          test -f src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java
+          test -f src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
+          test -f src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java
+          test -f src/main/java/com/z_mods/barotrauma/item/NavigationLinkerItem.java
+          test -f src/main/java/com/z_mods/barotrauma/item/SubmarineBuilderItem.java
+          test -f src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
 
-          unzip -oq /tmp/navigation-terminal-overlay.zip -d . \
-            -x 'src/main/java/com/z_mods/barotrauma/navigation/NavigationReferenceData.java' \
-               'src/main/java/com/z_mods/barotrauma/power/PowerSystem.java'
+      - name: Разрешить запуск Gradle
+        run: chmod +x gradlew
 
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/com/z_mods/barotrauma/Barotrauma.java \
-                  src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java \
-                  src/main/java/com/z_mods/barotrauma/init/ModItems.java \
-                  src/main/java/com/z_mods/barotrauma/item/NavigationLinkerItem.java \
-                  src/main/java/com/z_mods/barotrauma/item/SubmarineBuilderItem.java \
-                  src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java \
-                  src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java \
-                  src/main/java/com/z_mods/barotrauma/network/ModNetworking.java \
-                  src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java \
-                  src/main/java/com/z_mods/barotrauma/power/PowerWorldData.java \
-                  src/main/resources/assets/barotrauma/lang/en_us.json \
-                  src/main/resources/assets/barotrauma/lang/ru_ru.json \
-                  src/main/resources/assets/barotrauma/models/item/navigation_linker.json \
-                  src/main/resources/assets/barotrauma/models/item/submarine_builder.json \
-                  src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
+      - name: Собрать мод
+        run: ./gradlew build --stacktrace
 
-          if git diff --cached --quiet; then
-            echo 'Исходники уже материализованы.'
-            exit 0
-          fi
+      - name: Упаковать исходники
+        shell: bash
+        run: |
+          zip -qr EuropaMine-0.3.0-Forge-1.20.1-sources.zip . \
+            -x '.git/*' '.gradle/*' 'build/*' '.gui-assets/*' \
+               'EuropaMine-0.3.0-Forge-1.20.1-sources.zip'
 
-          git commit -m 'Добавить реальные исходники навигационного терминала'
-          git push origin HEAD:codex/navigation-source-files-fix
+      - name: Сохранить JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: EuropaMine-Forge-1.20.1-JAR
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Сохранить исходники
+        uses: actions/upload-artifact@v4
+        with:
+          name: EuropaMine-Forge-1.20.1-Sources
+          path: EuropaMine-0.3.0-Forge-1.20.1-sources.zip
+          if-no-files-found: error

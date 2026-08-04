@@ -21,11 +21,47 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Развернуть исправленный GUI-код
+      - name: Исправить масштаб GUI без изменения механики
         shell: bash
         run: |
           set -euo pipefail
-          cat .gui-assets/PowerScreens.part* | base64 --decode > src/main/java/com/z_mods/barotrauma/client/PowerScreens.java
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          source = Path("src/main/java/com/z_mods/barotrauma/client/PowerScreens.java")
+          text = source.read_text(encoding="utf-8")
+
+          replacements = (
+              (
+                  "return Math.min(width / (float) W, height / (float) H);",
+                  "return Math.min(1.0F, Math.min(width / (float) W, height / (float) H));",
+              ),
+              (
+                  "return Math.min(width / (float) panelWidth(), height / (float) panelHeight());",
+                  "return Math.min(1.0F, Math.min(width / (float) panelWidth(), height / (float) panelHeight()));",
+              ),
+          )
+
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f"Не найдена ожидаемая строка масштаба: {old}")
+
+          source.write_text(text, encoding="utf-8")
+
+          textures = (
+              Path("src/main/resources/assets/barotrauma/textures/gui/reactor_exact.png"),
+              Path("src/main/resources/assets/barotrauma/textures/gui/electrical_technical_exact.png"),
+              Path("src/main/resources/assets/barotrauma/textures/gui/electrical_maintenance_exact.png"),
+          )
+          for texture in textures:
+              data = texture.read_bytes()
+              if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                  raise SystemExit(f"Повреждён GUI-ресурс: {texture}")
+              print(f"{texture}: {len(data)} bytes, sha256={hashlib.sha256(data).hexdigest()}")
+          PY
 
       - name: Разрешить запуск Gradle
         run: chmod +x gradlew

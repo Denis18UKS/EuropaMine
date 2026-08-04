@@ -63,6 +63,27 @@ jobs:
               print(f"{texture}: {len(data)} bytes, sha256={hashlib.sha256(data).hexdigest()}")
           PY
 
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/main/java/com/z_mods/barotrauma/client/PowerScreens.java")
+          text = path.read_text(encoding="utf-8")
+
+          patches = {
+              "return Math.min(width / (float) W, height / (float) H);":
+                  "return Math.min(1.0F, Math.min(width / (float) W, height / (float) H));",
+              "return Math.min(width / (float) panelWidth(), height / (float) panelHeight());":
+                  "return Math.min(1.0F, Math.min(width / (float) panelWidth(), height / (float) panelHeight()));",
+          }
+
+          for old, new in patches.items():
+              if old not in text:
+                  raise SystemExit(f"Не найдена ожидаемая строка GUI: {old}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Разрешить запуск Gradle
         run: chmod +x gradlew
 

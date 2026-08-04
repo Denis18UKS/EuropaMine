@@ -48,5 +48,8 @@
   "message.barotrauma.photo_saved": "Photo for slot %s saved",
   "message.barotrauma.photo_failed": "Could not take the photo",
   "message.barotrauma.not_enough_players": "At least %s players are required",
-  "message.barotrauma.session_started": "Session started. Submarine: %s"
+  "message.barotrauma.session_started": "Session started. Submarine: %s",
+  "item.barotrauma.navigation_linker": "Navigation Control Linker",
+  "item.barotrauma.submarine_builder": "Multiblock Submarine Registrar",
+  "gui.barotrauma.navigation_terminal": "Navigation Terminal"
 }

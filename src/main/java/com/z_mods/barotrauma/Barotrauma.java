@@ -74,6 +74,8 @@ public class Barotrauma {
             event.accept(ModItems.WELDING_MACHINE_FUEL_TANK.get());
             event.accept(ModItems.PANEL_CAMERA.get());
             event.accept(ModItems.GUI_BINDER.get());
+            event.accept(ModItems.NAVIGATION_LINKER.get());
+            event.accept(ModItems.SUBMARINE_BUILDER.get());
             event.accept(ModItems.RED_WIRE_TOOL.get());
             event.accept(ModItems.BLUE_WIRE_TOOL.get());
             event.accept(ModItems.REACTOR_FUEL_ROD.get());

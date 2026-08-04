@@ -128,6 +128,74 @@ public final class PowerWorldData extends SavedData {
         return count;
     }
 
+    /** Total live reactor output visible from this node through the configured power network. */
+    public double availableOutput(BlockPos start) {
+        double output = 0.0D;
+        for (BlockPos node : component(start)) {
+            MachineState machine = machineAt(node);
+            if (machine != null && REACTOR_GUI.equals(machine.guiId) && machine.enabled) {
+                output += Math.max(0.0D, machine.output);
+            }
+        }
+        return output;
+    }
+
+    /** Emergency-stop every reactor connected to the specified node. */
+    public int shutdownReactors(BlockPos start) {
+        int changed = 0;
+        for (BlockPos node : component(start)) {
+            MachineState machine = machineAt(node);
+            if (machine != null && REACTOR_GUI.equals(machine.guiId) && machine.enabled) {
+                machine.enabled = false;
+                machine.automatic = false;
+                changed++;
+            }
+        }
+        if (changed > 0) setDirty();
+        return changed;
+    }
+
+    /**
+     * Moves GUI bindings, machine state and wire endpoints together with a movable structure.
+     * This keeps a navigation terminal functional after its containing submarine changes position.
+     */
+    public void moveRegion(BlockPos min, BlockPos max, int dx, int dy, int dz) {
+        if (dx == 0 && dy == 0 && dz == 0) return;
+        Map<Long, String> movedBindings = new HashMap<>();
+        for (Map.Entry<Long, String> entry : bindings.entrySet()) {
+            BlockPos pos = BlockPos.of(entry.getKey());
+            movedBindings.put((inside(pos, min, max) ? pos.offset(dx, dy, dz) : pos).asLong(), entry.getValue());
+        }
+        bindings.clear();
+        bindings.putAll(movedBindings);
+
+        Map<Long, MachineState> movedMachines = new HashMap<>();
+        for (Map.Entry<Long, MachineState> entry : machines.entrySet()) {
+            BlockPos pos = BlockPos.of(entry.getKey());
+            movedMachines.put((inside(pos, min, max) ? pos.offset(dx, dy, dz) : pos).asLong(), entry.getValue());
+        }
+        machines.clear();
+        machines.putAll(movedMachines);
+
+        Set<WireConnection> movedWires = new HashSet<>();
+        for (WireConnection wire : wires) {
+            BlockPos first = BlockPos.of(wire.a);
+            BlockPos second = BlockPos.of(wire.b);
+            if (inside(first, min, max)) first = first.offset(dx, dy, dz);
+            if (inside(second, min, max)) second = second.offset(dx, dy, dz);
+            movedWires.add(WireConnection.normalized(first.asLong(), second.asLong(), wire.color));
+        }
+        wires.clear();
+        wires.addAll(movedWires);
+        setDirty();
+    }
+
+    private static boolean inside(BlockPos pos, BlockPos min, BlockPos max) {
+        return pos.getX() >= min.getX() && pos.getX() <= max.getX()
+                && pos.getY() >= min.getY() && pos.getY() <= max.getY()
+                && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
+    }
+
     public void tick(ServerLevel level) {
         ticks++;
         if (ticks % 2L == 0L) updateMachines(level);

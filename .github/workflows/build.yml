@@ -39,13 +39,15 @@ jobs:
             cat .navigation-assets/navigation-overlay.part010
             cat .navigation-assets/navigation-overlay.part011
           } | tr -d '\r\n' | base64 --decode > /tmp/navigation-terminal-overlay.zip
-          unzip -oq /tmp/navigation-terminal-overlay.zip -d .
+          unzip -oq /tmp/navigation-terminal-overlay.zip -d . \
+            -x 'src/main/java/com/z_mods/barotrauma/navigation/NavigationReferenceData.java'
           python - <<'PY'
           from pathlib import Path
           import hashlib
 
           expected = [
               Path('src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java'),
+              Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationReferenceData.java'),
               Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java'),
               Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java'),
               Path('src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java'),

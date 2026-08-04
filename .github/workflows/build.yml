@@ -25,7 +25,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .navigation-assets/navigation-overlay.part* | tr -d '\r\n' | base64 --decode > /tmp/navigation-terminal-overlay.zip
+          {
+            cat .navigation-assets/navigation-overlay.part000
+            cat .navigation-assets/navigation-overlay.part001
+            cat .navigation-assets/navigation-overlay-fix002.part*
+            cat .navigation-assets/navigation-overlay.part003
+            cat .navigation-assets/navigation-overlay.part004
+            cat .navigation-assets/navigation-overlay.part005
+            cat .navigation-assets/navigation-overlay.part006
+            cat .navigation-assets/navigation-overlay.part007
+            cat .navigation-assets/navigation-overlay.part008
+            cat .navigation-assets/navigation-overlay.part009
+            cat .navigation-assets/navigation-overlay.part010
+            cat .navigation-assets/navigation-overlay.part011
+          } | tr -d '\r\n' | base64 --decode > /tmp/navigation-terminal-overlay.zip
           unzip -oq /tmp/navigation-terminal-overlay.zip -d .
           python - <<'PY'
           from pathlib import Path

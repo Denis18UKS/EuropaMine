@@ -21,11 +21,43 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Развернуть исправленный GUI-код
+      - name: Развернуть исправленный GUI-код и точные текстуры
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p src/main/java/com/z_mods/barotrauma/client
+          mkdir -p src/main/resources/assets/barotrauma/textures/gui
+
           cat .gui-assets/PowerScreens.part* | base64 --decode > src/main/java/com/z_mods/barotrauma/client/PowerScreens.java
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/main/java/com/z_mods/barotrauma/client/PowerScreens.java")
+          text = path.read_text(encoding="utf-8")
+
+          reactor_old = "return Math.min(width / (float) W, height / (float) H);"
+          reactor_new = "return Math.min(1.0F, Math.min(width / (float) W, height / (float) H));"
+          panel_old = "return Math.min(width / (float) panelWidth(), height / (float) panelHeight());"
+          panel_new = "return Math.min(1.0F, Math.min(width / (float) panelWidth(), height / (float) panelHeight()));"
+
+          if reactor_old not in text:
+              raise SystemExit("Не найдена функция масштаба интерфейса реактора")
+          if panel_old not in text:
+              raise SystemExit("Не найдена функция масштаба интерфейса электрощитка")
+
+          text = text.replace(reactor_old, reactor_new, 1)
+          text = text.replace(panel_old, panel_new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          cat .gui-assets/reactor_exact.part* | base64 --decode > src/main/resources/assets/barotrauma/textures/gui/reactor_exact.png
+          base64 --decode .gui-assets/technical_exact.b64 > src/main/resources/assets/barotrauma/textures/gui/electrical_technical_exact.png
+          base64 --decode .gui-assets/maintenance_exact.b64 > src/main/resources/assets/barotrauma/textures/gui/electrical_maintenance_exact.png
+
+          file src/main/resources/assets/barotrauma/textures/gui/reactor_exact.png
+          file src/main/resources/assets/barotrauma/textures/gui/electrical_technical_exact.png
+          file src/main/resources/assets/barotrauma/textures/gui/electrical_maintenance_exact.png
 
       - name: Разрешить запуск Gradle
         run: chmod +x gradlew

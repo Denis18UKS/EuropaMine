@@ -1,0 +1,56 @@
+name: Материализация правок движения и сонара
+
+on:
+  push:
+    branches:
+      - codex/navigation-motion-sonar-fix
+  workflow_dispatch:
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Получить ветку
+        uses: actions/checkout@v4
+        with:
+          ref: codex/navigation-motion-sonar-fix
+          fetch-depth: 0
+
+      - name: Развернуть реальные исходники
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .nav-motion-fix/part00 ]; then
+            echo "Пакет уже развёрнут."
+            exit 0
+          fi
+
+          cat .nav-motion-fix/part* | tr -d '\r\n' | base64 --decode > /tmp/navigation-motion-sonar-overlay.zip
+          echo "c56519a375f12cefc51abb4ec294b0617d73b537876d5f40e914ac0b0dc99f82  /tmp/navigation-motion-sonar-overlay.zip" | sha256sum -c -
+          unzip -oq /tmp/navigation-motion-sonar-overlay.zip -d .
+          rm -rf .nav-motion-fix
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- \
+            .nav-motion-fix \
+            src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java \
+            src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java \
+            src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java \
+            src/main/java/com/z_mods/barotrauma/network/ModNetworking.java \
+            src/main/java/com/z_mods/barotrauma/init/ModItems.java \
+            src/main/java/com/z_mods/barotrauma/Barotrauma.java \
+            src/main/resources/assets/barotrauma/lang/ru_ru.json \
+            src/main/resources/assets/barotrauma/lang/en_us.json \
+            src/main/resources/assets/barotrauma/models/item/active_hand_sonar.json \
+            src/main/resources/data/barotrauma/tags/entity_types/sonar_hostile.json
+
+          if git diff --cached --quiet; then
+            echo "Изменений для коммита нет."
+            exit 0
+          fi
+
+          git commit -m 'Исправить движение подлодки, автопилот и сонар'
+          git push origin HEAD:codex/navigation-motion-sonar-fix

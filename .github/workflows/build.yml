@@ -19,7 +19,7 @@ jobs:
           ref: codex/navigation-source-files-fix
           fetch-depth: 0
 
-      - name: Добавить реальные исходники и удалить временную упаковку
+      - name: Добавить реальные исходники
         shell: bash
         run: |
           set -euo pipefail
@@ -42,18 +42,28 @@ jobs:
             -x 'src/main/java/com/z_mods/barotrauma/navigation/NavigationReferenceData.java' \
                'src/main/java/com/z_mods/barotrauma/power/PowerSystem.java'
 
-          rm -rf .navigation-assets
-
-          python - <<'PY'
-          from pathlib import Path
-          import base64
-
-          clean_workflow = 'bmFtZTog0KHQsdC+0YDQutCwIEZvcmdlIDEuMjAuMQoKb246CiAgcHVzaDoKICBwdWxsX3JlcXVlc3Q6CiAgd29ya2Zsb3dfZGlzcGF0Y2g6Cgpqb2JzOgogIGJ1aWxkOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAogICAgcGVybWlzc2lvbnM6CiAgICAgIGNvbnRlbnRzOiByZWFkCiAgICBzdGVwczoKICAgICAgLSBuYW1lOiDQn9C+0LvRg9GH0LjRgtGMINC40YHRhdC+0LTQvdC40LrQuAogICAgICAgIHVzZXM6IGFjdGlvbnMvY2hlY2tvdXRAdjQKCiAgICAgIC0gbmFtZTog0KPRgdGC0LDQvdC+0LLQuNGC0YwgSmF2YSAxNwogICAgICAgIHVzZXM6IGFjdGlvbnMvc2V0dXAtamF2YUB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBkaXN0cmlidXRpb246IHRlbXVyaW4KICAgICAgICAgIGphdmEtdmVyc2lvbjogJzE3JwogICAgICAgICAgY2FjaGU6IGdyYWRsZQoKICAgICAgLSBuYW1lOiDQn9GA0L7QstC10YDQuNGC0Ywg0LjRgdGF0L7QtNC90LjQutC4INC90LDQstC40LPQsNGG0LjQvtC90L3QvtCz0L4g0YLQtdGA0LzQuNC90LDQu9CwCiAgICAgICAgc2hlbGw6IGJhc2gKICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICB0ZXN0IC1mIHNyYy9tYWluL2phdmEvY29tL3pfbW9kcy9iYXJvdHJhdW1hL2NsaWVudC9OYXZpZ2F0aW9uVGVybWluYWxTY3JlZW4uamF2YQogICAgICAgICAgdGVzdCAtZiBzcmMvbWFpbi9qYXZhL2NvbS96X21vZHMvYmFyb3RyYXVtYS9uYXZpZ2F0aW9uL05hdmlnYXRpb25Xb3JsZERhdGEuamF2YQogICAgICAgICAgdGVzdCAtZiBzcmMvbWFpbi9qYXZhL2NvbS96X21vZHMvYmFyb3RyYXVtYS9uYXZpZ2F0aW9uL05hdmlnYXRpb25TeXN0ZW0uamF2YQogICAgICAgICAgdGVzdCAtZiBzcmMvbWFpbi9qYXZhL2NvbS96X21vZHMvYmFyb3RyYXVtYS9uZXR3b3JrL05hdmlnYXRpb25QYWNrZXRzLmphdmEKICAgICAgICAgIHRlc3QgLWYgc3JjL21haW4vamF2YS9jb20vel9tb2RzL2Jhcm90cmF1bWEvaXRlbS9OYXZpZ2F0aW9uTGlua2VySXRlbS5qYXZhCiAgICAgICAgICB0ZXN0IC1mIHNyYy9tYWluL2phdmEvY29tL3pfbW9kcy9iYXJvdHJhdW1hL2l0ZW0vU3VibWFyaW5lQnVpbGRlckl0ZW0uamF2YQogICAgICAgICAgdGVzdCAtZiBzcmMvbWFpbi9yZXNvdXJjZXMvYXNzZXRzL2Jhcm90cmF1bWEvdGV4dHVyZXMvZ3VpL25hdmlnYXRpb25fdGVybWluYWxfZnJhbWUucG5nCgogICAgICAtIG5hbWU6INCg0LDQt9GA0LXRiNC40YLRjCDQt9Cw0L/Rg9GB0LogR3JhZGxlCiAgICAgICAgcnVuOiBjaG1vZCAreCBncmFkbGV3CgogICAgICAtIG5hbWU6INCh0L7QsdGA0LDRgtGMINC80L7QtAogICAgICAgIHJ1bjogLi9ncmFkbGV3IGJ1aWxkIC0tc3RhY2t0cmFjZQoKICAgICAgLSBuYW1lOiDQo9C/0LDQutC+0LLQsNGC0Ywg0LjRgdGF0L7QtNC90LjQutC4CiAgICAgICAgc2hlbGw6IGJhc2gKICAgICAgICBydW46IHwKICAgICAgICAgIHppcCAtcXIgRXVyb3BhTWluZS0wLjMuMC1Gb3JnZS0xLjIwLjEtc291cmNlcy56aXAgLiBcCiAgICAgICAgICAgIC14ICcuZ2l0LyonICcuZ3JhZGxlLyonICdidWlsZC8qJyAnLmd1aS1hc3NldHMvKicgXAogICAgICAgICAgICAgICAnRXVyb3BhTWluZS0wLjMuMC1Gb3JnZS0xLjIwLjEtc291cmNlcy56aXAnCgogICAgICAtIG5hbWU6INCh0L7RhdGA0LDQvdC40YLRjCBKQVIKICAgICAgICB1c2VzOiBhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBuYW1lOiBFdXJvcGFNaW5lLUZvcmdlLTEuMjAuMS1KQVIKICAgICAgICAgIHBhdGg6IGJ1aWxkL2xpYnMvKi5qYXIKICAgICAgICAgIGlmLW5vLWZpbGVzLWZvdW5kOiBlcnJvcgoKICAgICAgLSBuYW1lOiDQodC+0YXRgNCw0L3QuNGC0Ywg0LjRgdGF0L7QtNC90LjQutC4CiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogRXVyb3BhTWluZS1Gb3JnZS0xLjIwLjEtU291cmNlcwogICAgICAgICAgcGF0aDogRXVyb3BhTWluZS0wLjMuMC1Gb3JnZS0xLjIwLjEtc291cmNlcy56aXAKICAgICAgICAgIGlmLW5vLWZpbGVzLWZvdW5kOiBlcnJvcgo='
-          Path('.github/workflows/build.yml').write_bytes(base64.b64decode(clean_workflow))
-          PY
-
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add src/main/java/com/z_mods/barotrauma/Barotrauma.java \
+                  src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java \
+                  src/main/java/com/z_mods/barotrauma/init/ModItems.java \
+                  src/main/java/com/z_mods/barotrauma/item/NavigationLinkerItem.java \
+                  src/main/java/com/z_mods/barotrauma/item/SubmarineBuilderItem.java \
+                  src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java \
+                  src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java \
+                  src/main/java/com/z_mods/barotrauma/network/ModNetworking.java \
+                  src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java \
+                  src/main/java/com/z_mods/barotrauma/power/PowerWorldData.java \
+                  src/main/resources/assets/barotrauma/lang/en_us.json \
+                  src/main/resources/assets/barotrauma/lang/ru_ru.json \
+                  src/main/resources/assets/barotrauma/models/item/navigation_linker.json \
+                  src/main/resources/assets/barotrauma/models/item/submarine_builder.json \
+                  src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
+
+          if git diff --cached --quiet; then
+            echo 'Исходники уже материализованы.'
+            exit 0
+          fi
+
           git commit -m 'Добавить реальные исходники навигационного терминала'
           git push origin HEAD:codex/navigation-source-files-fix

@@ -1,0 +1,1 @@
+This branch must not modify reactor simulation, networking, commands, power calculations, repair logic, sabotage logic, or unrelated project files.

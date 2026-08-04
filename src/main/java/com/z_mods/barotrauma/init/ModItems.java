@@ -5,7 +5,9 @@ import com.z_mods.barotrauma.item.AccessConfiguratorItem;
 import com.z_mods.barotrauma.item.AccessNameTagItem;
 import com.z_mods.barotrauma.item.GarnitureHelmetItem;
 import com.z_mods.barotrauma.item.GuiBinderItem;
+import com.z_mods.barotrauma.item.NavigationLinkerItem;
 import com.z_mods.barotrauma.item.PanelCameraItem;
+import com.z_mods.barotrauma.item.SubmarineBuilderItem;
 import com.z_mods.barotrauma.item.WireToolItem;
 import com.z_mods.barotrauma.power.PowerWorldData;
 import net.minecraft.world.item.ArmorMaterials;
@@ -26,6 +28,12 @@ public class ModItems {
 
     public static final RegistryObject<Item> GUI_BINDER = ITEMS.register("gui_binder",
             () -> new GuiBinderItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> NAVIGATION_LINKER = ITEMS.register("navigation_linker",
+            () -> new NavigationLinkerItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> SUBMARINE_BUILDER = ITEMS.register("submarine_builder",
+            () -> new SubmarineBuilderItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> RED_WIRE_TOOL = ITEMS.register("red_wire_tool",
             () -> new WireToolItem(PowerWorldData.WireColor.RED, new Item.Properties().stacksTo(1)));

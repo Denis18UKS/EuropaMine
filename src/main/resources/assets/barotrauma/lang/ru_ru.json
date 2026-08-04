@@ -48,5 +48,8 @@
   "message.barotrauma.photo_saved": "Фотография для ячейки %s сохранена",
   "message.barotrauma.photo_failed": "Не удалось сделать фотографию",
   "message.barotrauma.not_enough_players": "Для запуска требуется минимум игроков: %s",
-  "message.barotrauma.session_started": "Сессия запущена. Выбрана подлодка: %s"
+  "message.barotrauma.session_started": "Сессия запущена. Выбрана подлодка: %s",
+  "item.barotrauma.navigation_linker": "Привязчик навигационного управления",
+  "item.barotrauma.submarine_builder": "Регистратор мультиблочной подлодки",
+  "gui.barotrauma.navigation_terminal": "Навигационный терминал"
 }

@@ -21,49 +21,17 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Развернуть навигационный терминал
+      - name: Проверить исходники навигационного терминала
         shell: bash
         run: |
           set -euo pipefail
-          {
-            cat .navigation-assets/navigation-overlay.part000
-            cat .navigation-assets/navigation-overlay.part001
-            cat .navigation-assets/navigation-overlay-fix002.part*
-            cat .navigation-assets/navigation-overlay.part003
-            cat .navigation-assets/navigation-overlay.part004
-            cat .navigation-assets/navigation-overlay.part005
-            cat .navigation-assets/navigation-overlay.part006
-            cat .navigation-assets/navigation-overlay.part007
-            cat .navigation-assets/navigation-overlay.part008
-            cat .navigation-assets/navigation-overlay.part009
-            cat .navigation-assets/navigation-overlay.part010
-            cat .navigation-assets/navigation-overlay.part011
-          } | tr -d '\r\n' | base64 --decode > /tmp/navigation-terminal-overlay.zip
-          unzip -oq /tmp/navigation-terminal-overlay.zip -d . \
-            -x 'src/main/java/com/z_mods/barotrauma/navigation/NavigationReferenceData.java'
-          python - <<'PY'
-          from pathlib import Path
-          import hashlib
-
-          expected = [
-              Path('src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java'),
-              Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationReferenceData.java'),
-              Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java'),
-              Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java'),
-              Path('src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java'),
-              Path('src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png'),
-          ]
-          for path in expected:
-              if not path.is_file():
-                  raise SystemExit(f'Не развернут обязательный файл: {path}')
-              print(f'{path}: {path.stat().st_size} bytes')
-
-          texture = expected[-1]
-          data = texture.read_bytes()
-          if not data.startswith(b'\x89PNG\r\n\x1a\n'):
-              raise SystemExit(f'Повреждена текстура навигационного терминала: {texture}')
-          print(f'navigation texture sha256={hashlib.sha256(data).hexdigest()}')
-          PY
+          test -f src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java
+          test -f src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java
+          test -f src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
+          test -f src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java
+          test -f src/main/java/com/z_mods/barotrauma/item/NavigationLinkerItem.java
+          test -f src/main/java/com/z_mods/barotrauma/item/SubmarineBuilderItem.java
+          test -f src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
 
       - name: Разрешить запуск Gradle
         run: chmod +x gradlew
@@ -75,7 +43,7 @@ jobs:
         shell: bash
         run: |
           zip -qr EuropaMine-0.3.0-Forge-1.20.1-sources.zip . \
-            -x '.git/*' '.gradle/*' 'build/*' '.gui-assets/*' '.navigation-assets/*' \
+            -x '.git/*' '.gradle/*' 'build/*' '.gui-assets/*' \
                'EuropaMine-0.3.0-Forge-1.20.1-sources.zip'
 
       - name: Сохранить JAR

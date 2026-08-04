@@ -80,7 +80,7 @@ public final class NavigationTerminalScreen extends Screen {
         if (pulse > 1.0F) pulse -= 1.0F;
         displayedForward += ((float) state.getDouble("ForwardSpeedKmh") - displayedForward) * 0.18F;
         displayedVertical += ((float) state.getDouble("VerticalSpeedKmh") - displayedVertical) * 0.18F;
-        if (++requestTicks >= 8) {
+        if (++requestTicks >= 10) {
             requestTicks = 0;
             send("request", 0);
         }
@@ -197,16 +197,14 @@ public final class NavigationTerminalScreen extends Screen {
             for (int i = 0; i < sonar.length; i++) {
                 if (sonar[i] <= 0) continue;
                 double angle = Math.PI * 2.0D * i / sonar.length;
-                if (directional && angularDifference((float) angle, beamAngle) > 0.28F) continue;
+                if (directional && angularDifference((float) angle, beamAngle) > 0.30F) continue;
                 double radius = sonar[i] / 100.0D * (SONAR_RADIUS - 19);
                 int x = SONAR_CX + (int) Math.round(Math.cos(angle) * radius);
                 int y = SONAR_CY + (int) Math.round(Math.sin(angle) * radius);
-                int seed = i * 7349 + (int) (pulse * 1000);
-                for (int p = 0; p < 5; p++) {
-                    int ox = ((seed >> (p + 1)) & 7) - 3;
-                    int oy = ((seed >> (p + 4)) & 7) - 3;
-                    fillCircle(g, x + ox, y + oy, 2, 0xB9268DFF);
-                }
+                // Obstacles: cyan/blue sonar returns. One compact glow instead of five
+                // circles per ray substantially reduces the per-frame GUI workload.
+                g.fill(x - 3, y - 3, x + 4, y + 4, 0x5037D7E3);
+                g.fill(x - 1, y - 1, x + 2, y + 2, 0xE94BCBFF);
             }
         }
 
@@ -215,8 +213,32 @@ public final class NavigationTerminalScreen extends Screen {
             CompoundTag contact = contacts.getCompound(i);
             int x = SONAR_CX + Math.round(contact.getFloat("X") * (SONAR_RADIUS - 25));
             int y = SONAR_CY + Math.round(contact.getFloat("Y") * (SONAR_RADIUS - 25));
-            int alpha = Mth.clamp((int) (contact.getFloat("Strength") * 220), 50, 220);
-            fillCircle(g, x, y, active ? 3 : 2, alpha << 24 | (active ? 0x002DA9FF : 0x007F9D8A));
+            int alpha = Mth.clamp((int) (contact.getFloat("Strength") * 220), 65, 220);
+            boolean enemy = "ENEMY".equals(contact.getString("Kind"));
+            if (enemy) {
+                circle(g, x, y, 7, alpha << 24 | 0x00FF3A2F, 2);
+                fillCircle(g, x, y, 2, 0xFFFF4A3D);
+            } else {
+                fillCircle(g, x, y, active ? 3 : 2,
+                        alpha << 24 | (active ? 0x0037C6E7 : 0x007F9D8A));
+            }
+        }
+
+        // Every player holding the active handheld sonar is an orange square with
+        // a name label. Several emitters can be displayed at the same time.
+        ListTag handSonars = state.getList("HandSonars", Tag.TAG_COMPOUND);
+        for (int i = 0; i < handSonars.size(); i++) {
+            CompoundTag contact = handSonars.getCompound(i);
+            int x = SONAR_CX + Math.round(contact.getFloat("X") * (SONAR_RADIUS - 25));
+            int y = SONAR_CY + Math.round(contact.getFloat("Y") * (SONAR_RADIUS - 25));
+            g.fill(x - 5, y - 5, x + 6, y + 6, 0xD6000000);
+            g.fill(x - 3, y - 3, x + 4, y + 4, 0xFFFF941F);
+            String name = trim(contact.getString("Name"), 18);
+            int labelWidth = font.width(name) + 6;
+            int labelX = x + 8;
+            if (labelX + labelWidth > SONAR_CX + SONAR_RADIUS - 4) labelX = x - labelWidth - 8;
+            g.fill(labelX, y - 7, labelX + labelWidth, y + 6, 0xB9000000);
+            g.drawString(font, name, labelX + 3, y - 5, 0xFFFFB45C, false);
         }
 
         // Deterministic interference in flooded or unpowered states, matching the orange disruption layer.
@@ -224,7 +246,7 @@ public final class NavigationTerminalScreen extends Screen {
         int flooded = 0;
         for (byte value : hull) if (value == 2) flooded++;
         if (flooded > 0 || (!powered && active)) {
-            int amount = Math.min(75, 12 + flooded * 2);
+            int amount = Math.min(48, 10 + flooded);
             for (int i = 0; i < amount; i++) {
                 double angle = i * 2.399963229728653D + pulse * 5.0D;
                 double radius = 65.0D + ((i * 37) % 185);
@@ -527,7 +549,7 @@ public final class NavigationTerminalScreen extends Screen {
     }
 
     private static void circle(GuiGraphics g, int cx, int cy, int radius, int color, int thickness) {
-        int steps = Math.max(48, radius * 5);
+        int steps = Math.max(48, Math.min(180, radius * 2));
         double previousX = cx + radius;
         double previousY = cy;
         for (int i = 1; i <= steps; i++) {

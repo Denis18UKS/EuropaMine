@@ -1,6 +1,7 @@
 package com.z_mods.barotrauma.network;
 
 import com.z_mods.barotrauma.client.NavigationTerminalScreen;
+import net.minecraft.client.Minecraft;
 import com.z_mods.barotrauma.navigation.NavigationSystem;
 import com.z_mods.barotrauma.navigation.NavigationWorldData;
 import com.z_mods.barotrauma.power.PowerWorldData;
@@ -12,6 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
@@ -33,6 +35,9 @@ public final class NavigationPackets {
         channel.messageBuilder(ClientboundNavigationState.class, ids.getAsInt())
                 .encoder(ClientboundNavigationState::encode).decoder(ClientboundNavigationState::decode)
                 .consumerMainThread(ClientboundNavigationState::handle).add();
+        channel.messageBuilder(ClientboundVesselMotion.class, ids.getAsInt())
+                .encoder(ClientboundVesselMotion::encode).decoder(ClientboundVesselMotion::decode)
+                .consumerMainThread(ClientboundVesselMotion::handle).add();
         channel.messageBuilder(ServerboundNavigationAction.class, ids.getAsInt())
                 .encoder(ServerboundNavigationAction::encode).decoder(ServerboundNavigationAction::decode)
                 .consumerMainThread(ServerboundNavigationAction::handle).add();
@@ -92,6 +97,35 @@ public final class NavigationPackets {
         }
     }
 
+    public static void sendVesselMotion(ServerPlayer player, Vec3 delta) {
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new ClientboundVesselMotion(delta.x, delta.y, delta.z));
+    }
+
+    public record ClientboundVesselMotion(double x, double y, double z) {
+        static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {
+            buffer.writeDouble(packet.x);
+            buffer.writeDouble(packet.y);
+            buffer.writeDouble(packet.z);
+        }
+
+        static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {
+            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble());
+        }
+
+        static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {
+            context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft.player == null) return;
+                minecraft.player.setPos(minecraft.player.getX() + packet.x,
+                        minecraft.player.getY() + packet.y,
+                        minecraft.player.getZ() + packet.z);
+                minecraft.player.fallDistance = 0.0F;
+            }));
+            context.get().setPacketHandled(true);
+        }
+    }
+
     public record ServerboundNavigationAction(BlockPos terminalPos, String action, int value, float x, float y) {
         public ServerboundNavigationAction(BlockPos terminalPos, String action, int value) {
             this(terminalPos, action, value, 0.0F, 0.0F);
@@ -133,9 +167,19 @@ public final class NavigationPackets {
             }
             case "toggle_sonar" -> terminal.toggleSonar();
             case "toggle_directional" -> terminal.toggleDirectional();
-            case "toggle_autopilot" -> terminal.toggleAutopilot();
+            case "toggle_autopilot" -> {
+                terminal.toggleAutopilot();
+                NavigationWorldData.VesselState vessel = data.vessel(terminal.vesselId());
+                if (terminal.autopilot() && terminal.selectedDestination() == 0 && vessel != null) {
+                    terminal.setMaintainPos(vessel.anchor());
+                }
+            }
             case "zoom" -> terminal.setZoom(packet.value);
-            case "select" -> terminal.selectDestination(packet.value);
+            case "select" -> {
+                terminal.selectDestination(packet.value);
+                NavigationWorldData.VesselState vessel = data.vessel(terminal.vesselId());
+                if (packet.value == 0 && vessel != null) terminal.setMaintainPos(vessel.anchor());
+            }
             case "manual" -> terminal.setManual(packet.x, packet.y);
             case "beam" -> terminal.setBeamAngle(packet.x);
             case "shutdown_reactor" -> {

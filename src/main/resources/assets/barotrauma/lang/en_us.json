@@ -51,5 +51,6 @@
   "message.barotrauma.session_started": "Session started. Submarine: %s",
   "item.barotrauma.navigation_linker": "Navigation Control Linker",
   "item.barotrauma.submarine_builder": "Multiblock Submarine Registrar",
-  "gui.barotrauma.navigation_terminal": "Navigation Terminal"
+  "gui.barotrauma.navigation_terminal": "Navigation Terminal",
+  "item.barotrauma.active_hand_sonar": "Active Handheld Sonar"
 }

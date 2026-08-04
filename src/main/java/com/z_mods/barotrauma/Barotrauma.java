@@ -76,6 +76,7 @@ public class Barotrauma {
             event.accept(ModItems.GUI_BINDER.get());
             event.accept(ModItems.NAVIGATION_LINKER.get());
             event.accept(ModItems.SUBMARINE_BUILDER.get());
+            event.accept(ModItems.ACTIVE_HAND_SONAR.get());
             event.accept(ModItems.RED_WIRE_TOOL.get());
             event.accept(ModItems.BLUE_WIRE_TOOL.get());
             event.accept(ModItems.REACTOR_FUEL_ROD.get());

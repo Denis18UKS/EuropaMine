@@ -1,15 +1,24 @@
 package com.z_mods.barotrauma.navigation;
 
+import com.z_mods.barotrauma.init.ModItems;
+import com.z_mods.barotrauma.network.NavigationPackets;
 import com.z_mods.barotrauma.power.PowerWorldData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -32,9 +41,18 @@ public final class NavigationWorldData extends SavedData {
     public static final String NAVIGATION_GUI = "navigation_terminal";
     private static final String DATA_NAME = "barotrauma_navigation_world";
     private static final int MAX_STRUCTURE_VOLUME = 32_768;
-    private static final int SONAR_RAYS = 120;
+    private static final int SONAR_RAYS = 96;
+    private static final int SONAR_REFRESH_TICKS = 10;
+    private static final double SONAR_STEP = 3.0D;
     private static final int STATUS_COLUMNS = 32;
     private static final int STATUS_ROWS = 12;
+    private static final double MAX_FORWARD_SPEED = 0.16D;
+    private static final double MAX_LATERAL_SPEED = 0.13D;
+    private static final double MAX_VERTICAL_SPEED = 0.11D;
+    private static final double VELOCITY_RESPONSE = 0.075D;
+    private static final int AUTOPILOT_LOOKAHEAD = 4;
+    private static final TagKey<EntityType<?>> SONAR_HOSTILE = TagKey.create(Registries.ENTITY_TYPE,
+            new ResourceLocation("barotrauma", "sonar_hostile"));
 
     private final Map<Long, TerminalState> terminals = new HashMap<>();
     private final Map<UUID, VesselState> vessels = new HashMap<>();
@@ -128,66 +146,118 @@ public final class NavigationWorldData extends SavedData {
     public void tick(ServerLevel level) {
         ticks++;
         aliases.entrySet().removeIf(entry -> entry.getValue().expiresAt < ticks);
-        if (ticks % 2L != 0L) return;
 
-        List<MoveRequest> moves = new ArrayList<>();
+        boolean changed = false;
+        Set<UUID> processed = new HashSet<>();
         for (Map.Entry<Long, TerminalState> entry : new ArrayList<>(terminals.entrySet())) {
             BlockPos terminalPos = BlockPos.of(entry.getKey());
             TerminalState terminal = entry.getValue();
             VesselState vessel = vessels.get(terminal.vesselId);
-            if (vessel == null) continue;
+            if (vessel == null || !processed.add(vessel.id)) continue;
 
             boolean powered = NavigationSystem.hasPower(level, terminalPos);
             Vec3 input = desiredInput(level, terminal, vessel);
-            double targetForward = powered ? input.x * 0.085D : 0.0D;
-            double targetVertical = powered ? input.y * 0.065D : 0.0D;
-            vessel.forwardVelocity += (targetForward - vessel.forwardVelocity) * 0.16D;
-            vessel.verticalVelocity += (targetVertical - vessel.verticalVelocity) * 0.16D;
-            if (!powered) {
-                vessel.forwardVelocity *= 0.84D;
-                vessel.verticalVelocity *= 0.84D;
-            }
+            double targetForward = powered ? input.x * MAX_FORWARD_SPEED : 0.0D;
+            double targetVertical = powered ? input.y * MAX_VERTICAL_SPEED : 0.0D;
+            double targetLateral = powered ? input.z * MAX_LATERAL_SPEED : 0.0D;
 
-            vessel.forwardAccumulator += vessel.forwardVelocity;
-            vessel.verticalAccumulator += vessel.verticalVelocity;
+            vessel.forwardVelocity = approach(vessel.forwardVelocity, targetForward, VELOCITY_RESPONSE);
+            vessel.verticalVelocity = approach(vessel.verticalVelocity, targetVertical, VELOCITY_RESPONSE);
+            vessel.lateralVelocity = approach(vessel.lateralVelocity, targetLateral, VELOCITY_RESPONSE);
+            if (!powered) {
+                vessel.forwardVelocity *= 0.82D;
+                vessel.verticalVelocity *= 0.82D;
+                vessel.lateralVelocity *= 0.82D;
+            }
 
             Direction facing = facingAt(level, terminalPos);
-            int dx = 0;
-            int dy = 0;
-            int dz = 0;
-            if (Math.abs(vessel.forwardAccumulator) >= 1.0D) {
-                int sign = vessel.forwardAccumulator > 0 ? 1 : -1;
-                dx = facing.getStepX() * sign;
-                dz = facing.getStepZ() * sign;
-                vessel.forwardAccumulator -= sign;
+            Direction right = facing.getClockWise();
+            Vec3 continuousMotion = new Vec3(
+                    facing.getStepX() * vessel.forwardVelocity + right.getStepX() * vessel.lateralVelocity,
+                    vessel.verticalVelocity,
+                    facing.getStepZ() * vessel.forwardVelocity + right.getStepZ() * vessel.lateralVelocity);
+
+            double nextForwardAccumulator = vessel.forwardAccumulator + vessel.forwardVelocity;
+            double nextVerticalAccumulator = vessel.verticalAccumulator + vessel.verticalVelocity;
+            double nextLateralAccumulator = vessel.lateralAccumulator + vessel.lateralVelocity;
+            int forwardStep = wholeStep(nextForwardAccumulator);
+            int verticalStep = wholeStep(nextVerticalAccumulator);
+            int lateralStep = wholeStep(nextLateralAccumulator);
+            int dx = facing.getStepX() * forwardStep + right.getStepX() * lateralStep;
+            int dy = verticalStep;
+            int dz = facing.getStepZ() * forwardStep + right.getStepZ() * lateralStep;
+
+            int probeForward = forwardStep != 0 ? forwardStep : sign(vessel.forwardVelocity);
+            int probeVertical = verticalStep != 0 ? verticalStep : sign(vessel.verticalVelocity);
+            int probeLateral = lateralStep != 0 ? lateralStep : sign(vessel.lateralVelocity);
+            int probeX = facing.getStepX() * probeForward + right.getStepX() * probeLateral;
+            int probeY = probeVertical;
+            int probeZ = facing.getStepZ() * probeForward + right.getStepZ() * probeLateral;
+
+            if ((probeX != 0 || probeY != 0 || probeZ != 0)
+                    && !isStepClear(level, vessel, 0, 0, 0, probeX, probeY, probeZ)) {
+                stopVessel(vessel);
+                continue;
             }
-            if (Math.abs(vessel.verticalAccumulator) >= 1.0D) {
-                dy = vessel.verticalAccumulator > 0 ? 1 : -1;
-                vessel.verticalAccumulator -= dy;
+
+            vessel.forwardAccumulator = nextForwardAccumulator;
+            vessel.verticalAccumulator = nextVerticalAccumulator;
+            vessel.lateralAccumulator = nextLateralAccumulator;
+
+            boolean translated = true;
+            if (dx != 0 || dy != 0 || dz != 0) {
+                translated = translateVessel(level, vessel, dx, dy, dz);
+                if (translated) {
+                    vessel.forwardAccumulator -= forwardStep;
+                    vessel.verticalAccumulator -= verticalStep;
+                    vessel.lateralAccumulator -= lateralStep;
+                    vessel.lastMoveTick = ticks;
+                    translateTerminalsAndAliases(vessel, dx, dy, dz);
+                    changed = true;
+                }
             }
-            if (dx != 0 || dy != 0 || dz != 0) moves.add(new MoveRequest(vessel.id, terminalPos, dx, dy, dz));
+
+            if (!translated) {
+                stopVessel(vessel);
+                continue;
+            }
+
+            // The physical blocks still move on the Minecraft block grid, but entities are
+            // carried by the fractional velocity every server tick. This removes the old
+            // one-block player correction and makes standing/walking inside the vessel smooth.
+            if (continuousMotion.lengthSqr() > 1.0E-7D) {
+                moveCarriedEntities(level, vessel, continuousMotion);
+            }
         }
 
-        Set<UUID> moved = new HashSet<>();
-        for (MoveRequest request : moves) {
-            if (!moved.add(request.vesselId)) continue;
-            VesselState vessel = vessels.get(request.vesselId);
-            if (vessel == null) continue;
-            if (translateVessel(level, vessel, request.dx, request.dy, request.dz)) {
-                vessel.lastMoveTick = ticks;
-                translateTerminalsAndAliases(vessel, request.dx, request.dy, request.dz);
-            } else {
-                vessel.forwardVelocity *= 0.2D;
-                vessel.verticalVelocity *= 0.2D;
-                vessel.forwardAccumulator = 0.0D;
-                vessel.verticalAccumulator = 0.0D;
-            }
-        }
-        if (ticks % 20L == 0L || !moves.isEmpty()) setDirty();
+        if (ticks % 20L == 0L || changed) setDirty();
+    }
+
+    private static double approach(double current, double target, double response) {
+        double next = current + (target - current) * response;
+        return Math.abs(next) < 1.0E-5D && Math.abs(target) < 1.0E-5D ? 0.0D : next;
+    }
+
+    private static int wholeStep(double accumulator) {
+        return accumulator >= 1.0D ? 1 : accumulator <= -1.0D ? -1 : 0;
+    }
+
+    private static int sign(double value) {
+        return value > 1.0E-4D ? 1 : value < -1.0E-4D ? -1 : 0;
+    }
+
+    private static void stopVessel(VesselState vessel) {
+        vessel.forwardVelocity *= 0.25D;
+        vessel.verticalVelocity *= 0.25D;
+        vessel.lateralVelocity *= 0.25D;
+        vessel.forwardAccumulator = Mth.clamp(vessel.forwardAccumulator, -0.95D, 0.95D);
+        vessel.verticalAccumulator = Mth.clamp(vessel.verticalAccumulator, -0.95D, 0.95D);
+        vessel.lateralAccumulator = Mth.clamp(vessel.lateralAccumulator, -0.95D, 0.95D);
     }
 
     private Vec3 desiredInput(ServerLevel level, TerminalState terminal, VesselState vessel) {
         if (!terminal.autopilot) {
+            terminal.clearAvoidance();
             return new Vec3(Mth.clamp(terminal.manualForward, -1.0F, 1.0F),
                     Mth.clamp(terminal.manualVertical, -1.0F, 1.0F), 0.0D);
         }
@@ -203,15 +273,143 @@ public final class NavigationWorldData extends SavedData {
         }
         if (destination == null) return Vec3.ZERO;
 
-        Direction facing = facingAt(level, terminal.currentTerminalPos == null ? vessel.anchor() : terminal.currentTerminalPos);
         BlockPos anchor = vessel.anchor();
-        double horizontal = (destination.getX() - anchor.getX()) * facing.getStepX()
-                + (destination.getZ() - anchor.getZ()) * facing.getStepZ();
-        double vertical = destination.getY() - anchor.getY();
-        if (Math.abs(horizontal) < 1.5D) horizontal = 0.0D;
-        if (Math.abs(vertical) < 1.5D) vertical = 0.0D;
-        double max = Math.max(1.0D, Math.max(Math.abs(horizontal), Math.abs(vertical)));
-        return new Vec3(horizontal / max, vertical / max, 0.0D);
+        Vec3 worldDifference = new Vec3(destination.getX() - anchor.getX(),
+                destination.getY() - anchor.getY(), destination.getZ() - anchor.getZ());
+        if (worldDifference.lengthSqr() < 2.25D) {
+            terminal.clearAvoidance();
+            return Vec3.ZERO;
+        }
+
+        Direction facing = facingAt(level,
+                terminal.currentTerminalPos == null ? vessel.anchor() : terminal.currentTerminalPos);
+        Direction right = facing.getClockWise();
+        double forward = worldDifference.x * facing.getStepX() + worldDifference.z * facing.getStepZ();
+        double lateral = worldDifference.x * right.getStepX() + worldDifference.z * right.getStepZ();
+        double vertical = worldDifference.y;
+        double maximum = Math.max(1.0D, Math.max(Math.abs(forward), Math.max(Math.abs(vertical), Math.abs(lateral))));
+        Vec3 directLocal = new Vec3(forward / maximum, vertical / maximum, lateral / maximum);
+
+        int directX = sign(worldDifference.x);
+        int directY = sign(worldDifference.y);
+        int directZ = sign(worldDifference.z);
+        if (isCorridorClear(level, vessel, directX, directY, directZ, 2)) {
+            terminal.clearAvoidance();
+            return directLocal;
+        }
+
+        if (terminal.avoidanceTicks > 0
+                && isCorridorClear(level, vessel, terminal.avoidanceX, terminal.avoidanceY,
+                terminal.avoidanceZ, AUTOPILOT_LOOKAHEAD)) {
+            terminal.avoidanceTicks--;
+            return worldStepToLocal(terminal.avoidanceX, terminal.avoidanceY,
+                    terminal.avoidanceZ, facing, right);
+        }
+
+        int[] detour = chooseDetour(level, vessel, destination, directX, directY, directZ);
+        if (detour == null) {
+            terminal.clearAvoidance();
+            return Vec3.ZERO;
+        }
+        terminal.avoidanceX = detour[0];
+        terminal.avoidanceY = detour[1];
+        terminal.avoidanceZ = detour[2];
+        terminal.avoidanceTicks = 30;
+        return worldStepToLocal(detour[0], detour[1], detour[2], facing, right);
+    }
+
+    private int[] chooseDetour(ServerLevel level, VesselState vessel, BlockPos destination,
+                                int directX, int directY, int directZ) {
+        BlockPos anchor = vessel.anchor();
+        int[] best = null;
+        double bestScore = Double.POSITIVE_INFINITY;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) continue;
+                    if (dx == directX && dy == directY && dz == directZ) continue;
+                    if (!isCorridorClear(level, vessel, dx, dy, dz, AUTOPILOT_LOOKAHEAD)) continue;
+
+                    double progress = dx * directX + dy * directY + dz * directZ;
+                    BlockPos projected = anchor.offset(dx * AUTOPILOT_LOOKAHEAD,
+                            dy * AUTOPILOT_LOOKAHEAD, dz * AUTOPILOT_LOOKAHEAD);
+                    double score = projected.distSqr(destination);
+                    if (progress < 0.0D) score += 400.0D;
+                    if (dy != 0) score += 5.0D; // Prefer a horizontal bypass when equally safe.
+                    if (dx != 0 && dz != 0) score += 1.5D;
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = new int[]{dx, dy, dz};
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    private Vec3 worldStepToLocal(int dx, int dy, int dz, Direction facing, Direction right) {
+        double forward = dx * facing.getStepX() + dz * facing.getStepZ();
+        double lateral = dx * right.getStepX() + dz * right.getStepZ();
+        double maximum = Math.max(1.0D, Math.max(Math.abs(forward), Math.max(Math.abs(dy), Math.abs(lateral))));
+        return new Vec3(forward / maximum, dy / maximum, lateral / maximum);
+    }
+
+    private boolean isCorridorClear(ServerLevel level, VesselState vessel,
+                                    int dx, int dy, int dz, int distance) {
+        if (dx == 0 && dy == 0 && dz == 0) return true;
+        int offsetX = 0;
+        int offsetY = 0;
+        int offsetZ = 0;
+        for (int step = 0; step < distance; step++) {
+            if (!isStepClear(level, vessel, offsetX, offsetY, offsetZ, dx, dy, dz)) return false;
+            offsetX += dx;
+            offsetY += dy;
+            offsetZ += dz;
+        }
+        return true;
+    }
+
+    private boolean isStepClear(ServerLevel level, VesselState vessel,
+                                int offsetX, int offsetY, int offsetZ,
+                                int dx, int dy, int dz) {
+        BlockPos oldMin = vessel.min.offset(offsetX, offsetY, offsetZ);
+        BlockPos oldMax = vessel.max.offset(offsetX, offsetY, offsetZ);
+        BlockPos newMin = oldMin.offset(dx, dy, dz);
+        BlockPos newMax = oldMax.offset(dx, dy, dz);
+        Set<Long> checked = new HashSet<>();
+
+        if (dx != 0) {
+            int x = dx > 0 ? newMax.getX() : newMin.getX();
+            for (int y = newMin.getY(); y <= newMax.getY(); y++) {
+                for (int z = newMin.getZ(); z <= newMax.getZ(); z++) {
+                    if (!isDestinationFree(level, vessel, new BlockPos(x, y, z), checked)) return false;
+                }
+            }
+        }
+        if (dy != 0) {
+            int y = dy > 0 ? newMax.getY() : newMin.getY();
+            for (int x = newMin.getX(); x <= newMax.getX(); x++) {
+                for (int z = newMin.getZ(); z <= newMax.getZ(); z++) {
+                    if (!isDestinationFree(level, vessel, new BlockPos(x, y, z), checked)) return false;
+                }
+            }
+        }
+        if (dz != 0) {
+            int z = dz > 0 ? newMax.getZ() : newMin.getZ();
+            for (int x = newMin.getX(); x <= newMax.getX(); x++) {
+                for (int y = newMin.getY(); y <= newMax.getY(); y++) {
+                    if (!isDestinationFree(level, vessel, new BlockPos(x, y, z), checked)) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean isDestinationFree(ServerLevel level, VesselState vessel, BlockPos pos, Set<Long> checked) {
+        if (!checked.add(pos.asLong()) || vessel.contains(pos)) return true;
+        if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) return false;
+        BlockState state = level.getBlockState(pos);
+        return state.isAir() || !state.getFluidState().isEmpty() || state.canBeReplaced();
     }
 
     private Direction facingAt(ServerLevel level, BlockPos pos) {
@@ -250,10 +448,6 @@ public final class NavigationWorldData extends SavedData {
             }
         }
 
-        AABB oldBounds = new AABB(oldMin, oldMax.offset(1, 1, 1));
-        List<Entity> passengers = level.getEntities((Entity) null, oldBounds,
-                entity -> entity.isAlive() && !(entity instanceof net.minecraft.world.entity.decoration.HangingEntity));
-
         for (BlockSnapshot snapshot : snapshots) level.setBlock(snapshot.pos, Blocks.AIR.defaultBlockState(), 18);
         for (BlockSnapshot snapshot : snapshots) {
             BlockPos destination = snapshot.pos.offset(dx, dy, dz);
@@ -271,14 +465,36 @@ public final class NavigationWorldData extends SavedData {
             }
         }
 
-        for (Entity entity : passengers) {
-            entity.teleportTo(entity.getX() + dx, entity.getY() + dy, entity.getZ() + dz);
-        }
-
         PowerWorldData.get(level).moveRegion(oldMin, oldMax, dx, dy, dz);
         vessel.min = oldMin.offset(dx, dy, dz);
         vessel.max = oldMax.offset(dx, dy, dz);
+        vessel.hullCache = null;
+        vessel.hullCacheTick = Long.MIN_VALUE;
         return true;
+    }
+
+
+    private void moveCarriedEntities(ServerLevel level, VesselState vessel, Vec3 delta) {
+        AABB bounds = new AABB(
+                vessel.min.getX() - 0.35D, vessel.min.getY() - 0.75D, vessel.min.getZ() - 0.35D,
+                vessel.max.getX() + 1.35D, vessel.max.getY() + 3.0D, vessel.max.getZ() + 1.35D);
+        List<Entity> carried = level.getEntities((Entity) null, bounds,
+                entity -> entity.isAlive()
+                        && !(entity instanceof net.minecraft.world.entity.decoration.HangingEntity)
+                        && !entity.isPassenger());
+        for (Entity entity : carried) {
+            double x = entity.getX() + delta.x;
+            double y = entity.getY() + delta.y;
+            double z = entity.getZ() + delta.z;
+            if (entity instanceof ServerPlayer player) {
+                player.setPos(x, y, z);
+                player.fallDistance = 0.0F;
+                NavigationPackets.sendVesselMotion(player, delta);
+            } else {
+                entity.setPos(x, y, z);
+                entity.fallDistance = 0.0F;
+            }
+        }
     }
 
     private void translateTerminalsAndAliases(VesselState vessel, int dx, int dy, int dz) {
@@ -329,6 +545,8 @@ public final class NavigationWorldData extends SavedData {
             tag.putBoolean("Linked", false);
             tag.putInt("Depth", Math.max(0, level.getSeaLevel() - terminalPos.getY()));
             tag.putIntArray("Sonar", new int[SONAR_RAYS]);
+            tag.put("Contacts", new ListTag());
+            tag.put("HandSonars", new ListTag());
             tag.putByteArray("HullGrid", new byte[STATUS_COLUMNS * STATUS_ROWS]);
             putTargets(level, tag, terminal, terminalPos);
             return tag;
@@ -344,42 +562,189 @@ public final class NavigationWorldData extends SavedData {
         tag.putLong("Anchor", anchor.asLong());
         tag.putDouble("ForwardSpeedKmh", vessel.forwardVelocity * 20.0D * 3.6D);
         tag.putDouble("VerticalSpeedKmh", -vessel.verticalVelocity * 20.0D * 3.6D);
+        tag.putDouble("LateralSpeedKmh", vessel.lateralVelocity * 20.0D * 3.6D);
         tag.putInt("Depth", Math.max(0, level.getSeaLevel() - anchor.getY()));
-        tag.putBoolean("Docked", vessel.origin.distSqr(anchor) < 16.0D && Math.abs(vessel.forwardVelocity) < 0.005D);
-        tag.putIntArray("Sonar", scanSonar(level, terminalPos, terminal, vessel));
-        tag.putByteArray("HullGrid", buildHullGrid(level, terminalPos, vessel));
+        tag.putBoolean("Docked", vessel.origin.distSqr(anchor) < 16.0D
+                && Math.abs(vessel.forwardVelocity) < 0.005D
+                && Math.abs(vessel.verticalVelocity) < 0.005D
+                && Math.abs(vessel.lateralVelocity) < 0.005D);
+        SonarSnapshot sonar = sonarSnapshot(level, terminalPos, terminal, vessel);
+        tag.putIntArray("Sonar", sonar.obstacles);
+        putSonarContacts(tag, sonar.contacts);
+        putHandSonars(tag, sonar.handSonars);
+        tag.putByteArray("HullGrid", buildHullGridCached(level, terminalPos, vessel));
         tag.putInt("HullColumns", STATUS_COLUMNS);
         tag.putInt("HullRows", STATUS_ROWS);
         putCrew(level, tag, terminalPos, vessel);
-        putContacts(level, tag, terminalPos, terminal, vessel);
         putTargets(level, tag, terminal, anchor);
         return tag;
     }
 
-    private int[] scanSonar(ServerLevel level, BlockPos terminalPos, TerminalState terminal, VesselState vessel) {
-        int[] distances = new int[SONAR_RAYS];
-        if (!terminal.activeSonar) return distances;
+    private SonarSnapshot sonarSnapshot(ServerLevel level, BlockPos terminalPos,
+                                          TerminalState terminal, VesselState vessel) {
+        boolean settingsChanged = terminal.sonarCache == null
+                || terminal.sonarCacheZoom != terminal.zoom
+                || terminal.sonarCacheActive != terminal.activeSonar
+                || terminal.sonarCacheDirectional != terminal.directional
+                || Math.abs(terminal.sonarCacheBeam - terminal.beamAngle) > 0.01F;
+        if (!settingsChanged && ticks - terminal.sonarCacheTick < SONAR_REFRESH_TICKS) {
+            return terminal.sonarCache;
+        }
+
         Direction facing = facingAt(level, terminalPos);
+        double range = Mth.lerp(terminal.zoom / 100.0D, 220.0D, 72.0D);
+        int[] obstacles = terminal.activeSonar
+                ? scanSonarObstacles(level, terminal, vessel, facing, range)
+                : new int[SONAR_RAYS];
+        List<SonarContact> contacts = collectSonarContacts(level, terminal, vessel, facing, range);
+        List<HandSonarContact> handSonars = collectHandSonars(level, terminal, vessel, facing, range);
+
+        SonarSnapshot snapshot = new SonarSnapshot(obstacles, contacts, handSonars);
+        terminal.sonarCache = snapshot;
+        terminal.sonarCacheTick = ticks;
+        terminal.sonarCacheZoom = terminal.zoom;
+        terminal.sonarCacheActive = terminal.activeSonar;
+        terminal.sonarCacheDirectional = terminal.directional;
+        terminal.sonarCacheBeam = terminal.beamAngle;
+        return snapshot;
+    }
+
+    private int[] scanSonarObstacles(ServerLevel level, TerminalState terminal, VesselState vessel,
+                                     Direction facing, double maxDistance) {
+        int[] distances = new int[SONAR_RAYS];
         BlockPos origin = vessel.anchor();
-        double maxDistance = Mth.lerp(terminal.zoom / 100.0D, 220.0D, 72.0D);
         for (int i = 0; i < SONAR_RAYS; i++) {
             double angle = Math.PI * 2.0D * i / SONAR_RAYS;
+            if (terminal.directional && angularDifference((float) angle, terminal.beamAngle) > 0.30F) continue;
             double forward = Math.cos(angle);
             double vertical = Math.sin(angle);
-            for (double distance = 3.0D; distance <= maxDistance; distance += 1.5D) {
+            for (double distance = 3.0D; distance <= maxDistance; distance += SONAR_STEP) {
                 int x = Mth.floor(origin.getX() + facing.getStepX() * forward * distance);
                 int y = Mth.floor(origin.getY() + vertical * distance);
                 int z = Mth.floor(origin.getZ() + facing.getStepZ() * forward * distance);
                 BlockPos sample = new BlockPos(x, y, z);
                 if (vessel.contains(sample)) continue;
+                if (!level.hasChunkAt(sample)) break;
                 BlockState state = level.getBlockState(sample);
-                if (!state.isAir() && state.getFluidState().isEmpty()) {
+                if (!state.isAir() && state.getFluidState().isEmpty() && !state.canBeReplaced()) {
                     distances[i] = Mth.clamp((int) Math.round(distance * 100.0D / maxDistance), 1, 100);
                     break;
                 }
             }
         }
         return distances;
+    }
+
+    private List<SonarContact> collectSonarContacts(ServerLevel level, TerminalState terminal,
+                                                     VesselState vessel, Direction facing, double range) {
+        BlockPos anchor = vessel.anchor();
+        Vec3 center = Vec3.atCenterOf(anchor);
+        AABB area = new AABB(anchor).inflate(range);
+        List<SonarContact> contacts = new ArrayList<>();
+        for (Entity entity : level.getEntities((Entity) null, area,
+                entity -> entity.isAlive() && entity instanceof LivingEntity
+                        && !(entity instanceof ServerPlayer)
+                        && !vessel.contains(entity.blockPosition()))) {
+            Vec3 delta = entity.position().subtract(center);
+            SonarProjection projection = projectToSonar(delta, facing, range);
+            if (projection == null) continue;
+            float angle = (float) Math.atan2(projection.y, projection.x);
+            if (terminal.directional && angularDifference(angle, terminal.beamAngle) > 0.32F) continue;
+            boolean hostile = isHostile(entity);
+            if (!terminal.activeSonar && !hostile && entity.getDeltaMovement().lengthSqr() < 0.01D) continue;
+            float strength = (float) Mth.clamp(entity.getDeltaMovement().length() * 3.0D + (hostile ? 0.55D : 0.25D),
+                    0.2D, 1.0D);
+            contacts.add(new SonarContact(projection.x, projection.y, strength,
+                    entity.getDisplayName().getString(), hostile ? "ENEMY" : "CREATURE"));
+            if (contacts.size() >= 64) break;
+        }
+        return contacts;
+    }
+
+    private List<HandSonarContact> collectHandSonars(ServerLevel level, TerminalState terminal,
+                                                      VesselState vessel, Direction facing, double range) {
+        BlockPos anchor = vessel.anchor();
+        Vec3 center = Vec3.atCenterOf(anchor);
+        List<HandSonarContact> result = new ArrayList<>();
+        for (ServerPlayer player : level.players()) {
+            boolean active = player.getMainHandItem().is(ModItems.ACTIVE_HAND_SONAR.get())
+                    || player.getOffhandItem().is(ModItems.ACTIVE_HAND_SONAR.get());
+            if (!active) continue;
+            Vec3 delta = player.position().subtract(center);
+            SonarProjection projection = projectToSonar(delta, facing, range);
+            if (projection == null) continue;
+            float angle = (float) Math.atan2(projection.y, projection.x);
+            if (terminal.directional && angularDifference(angle, terminal.beamAngle) > 0.32F) continue;
+            result.add(new HandSonarContact(projection.x, projection.y,
+                    player.getGameProfile().getName(), player.getUUID()));
+        }
+        return result;
+    }
+
+    private SonarProjection projectToSonar(Vec3 delta, Direction facing, double range) {
+        Direction right = facing.getClockWise();
+        double forward = delta.x * facing.getStepX() + delta.z * facing.getStepZ();
+        double lateral = delta.x * right.getStepX() + delta.z * right.getStepZ();
+        double horizontalMagnitude = Math.sqrt(forward * forward + lateral * lateral);
+        double signedHorizontal = Math.copySign(horizontalMagnitude,
+                Math.abs(forward) > 0.001D ? forward : lateral);
+        if (Math.abs(signedHorizontal) > range || Math.abs(delta.y) > range) return null;
+        double radiusSquared = signedHorizontal * signedHorizontal + delta.y * delta.y;
+        if (radiusSquared > range * range) return null;
+        return new SonarProjection((float) (signedHorizontal / range), (float) (-delta.y / range));
+    }
+
+    private boolean isHostile(Entity entity) {
+        if (entity instanceof Enemy) return true;
+        if (entity.getType().is(SONAR_HOSTILE) || entity.getTags().contains("barotrauma_sonar_hostile")) return true;
+        if (entity instanceof Mob mob && mob.getTarget() instanceof ServerPlayer) return true;
+        return false;
+    }
+
+    private void putSonarContacts(CompoundTag tag, List<SonarContact> contacts) {
+        ListTag rows = new ListTag();
+        for (SonarContact contact : contacts) {
+            CompoundTag row = new CompoundTag();
+            row.putFloat("X", contact.x);
+            row.putFloat("Y", contact.y);
+            row.putFloat("Strength", contact.strength);
+            row.putString("Name", contact.name);
+            row.putString("Kind", contact.kind);
+            rows.add(row);
+        }
+        tag.put("Contacts", rows);
+    }
+
+    private void putHandSonars(CompoundTag tag, List<HandSonarContact> contacts) {
+        ListTag rows = new ListTag();
+        for (HandSonarContact contact : contacts) {
+            CompoundTag row = new CompoundTag();
+            row.putFloat("X", contact.x);
+            row.putFloat("Y", contact.y);
+            row.putString("Name", contact.name);
+            row.putUUID("Uuid", contact.uuid);
+            rows.add(row);
+        }
+        tag.put("HandSonars", rows);
+    }
+
+    private static float angularDifference(float a, float b) {
+        float difference = (a - b) % ((float) Math.PI * 2.0F);
+        if (difference > Math.PI) difference -= (float) Math.PI * 2.0F;
+        if (difference < -Math.PI) difference += (float) Math.PI * 2.0F;
+        return Math.abs(difference);
+    }
+
+    private byte[] buildHullGridCached(ServerLevel level, BlockPos terminalPos, VesselState vessel) {
+        Direction.Axis axis = facingAt(level, terminalPos).getAxis();
+        if (vessel.hullCache != null && vessel.hullCacheAxis == axis
+                && ticks - vessel.hullCacheTick < 20L) {
+            return vessel.hullCache.clone();
+        }
+        vessel.hullCache = buildHullGrid(level, terminalPos, vessel);
+        vessel.hullCacheAxis = axis;
+        vessel.hullCacheTick = ticks;
+        return vessel.hullCache.clone();
     }
 
     private byte[] buildHullGrid(ServerLevel level, BlockPos terminalPos, VesselState vessel) {
@@ -422,29 +787,6 @@ public final class NavigationWorldData extends SavedData {
             crew.add(row);
         }
         tag.put("Crew", crew);
-    }
-
-    private void putContacts(ServerLevel level, CompoundTag tag, BlockPos terminalPos, TerminalState terminal, VesselState vessel) {
-        BlockPos anchor = vessel.anchor();
-        double range = Mth.lerp(terminal.zoom / 100.0D, 220.0D, 72.0D);
-        AABB area = new AABB(anchor).inflate(range);
-        Direction facing = facingAt(level, terminalPos);
-        ListTag contacts = new ListTag();
-        for (Entity entity : level.getEntities((Entity) null, area,
-                entity -> entity.isAlive() && !vessel.contains(entity.blockPosition()) && !(entity instanceof ServerPlayer))) {
-            Vec3 delta = entity.position().subtract(Vec3.atCenterOf(anchor));
-            double horizontal = delta.x * facing.getStepX() + delta.z * facing.getStepZ();
-            if (Math.abs(horizontal) > range || Math.abs(delta.y) > range) continue;
-            if (!terminal.activeSonar && entity.getDeltaMovement().lengthSqr() < 0.0025D) continue;
-            CompoundTag row = new CompoundTag();
-            row.putFloat("X", (float) (horizontal / range));
-            row.putFloat("Y", (float) (-delta.y / range));
-            row.putFloat("Strength", (float) Mth.clamp(entity.getDeltaMovement().length() * 4.0D + 0.25D, 0.2D, 1.0D));
-            row.putString("Name", entity.getDisplayName().getString());
-            contacts.add(row);
-            if (contacts.size() >= 48) break;
-        }
-        tag.put("Contacts", contacts);
     }
 
     private void putTargets(ServerLevel level, CompoundTag tag, TerminalState terminal, BlockPos origin) {
@@ -537,6 +879,16 @@ public final class NavigationWorldData extends SavedData {
         private float beamAngle;
         private BlockPos maintainPos;
         private transient BlockPos currentTerminalPos;
+        private transient int avoidanceX;
+        private transient int avoidanceY;
+        private transient int avoidanceZ;
+        private transient int avoidanceTicks;
+        private transient SonarSnapshot sonarCache;
+        private transient long sonarCacheTick = Long.MIN_VALUE;
+        private transient int sonarCacheZoom = -1;
+        private transient boolean sonarCacheActive;
+        private transient boolean sonarCacheDirectional;
+        private transient float sonarCacheBeam;
 
         public UUID vesselId() { return vesselId; }
         public boolean activeSonar() { return activeSonar; }
@@ -546,19 +898,49 @@ public final class NavigationWorldData extends SavedData {
         public int selectedDestination() { return selectedDestination; }
         public float beamAngle() { return beamAngle; }
 
-        public void toggleSonar() { activeSonar = !activeSonar; }
-        public void toggleDirectional() { directional = !directional; }
+        public void toggleSonar() {
+            activeSonar = !activeSonar;
+            invalidateSonar();
+        }
+        public void toggleDirectional() {
+            directional = !directional;
+            invalidateSonar();
+        }
         public void toggleAutopilot() {
             autopilot = !autopilot;
+            clearAvoidance();
             if (!autopilot) selectedDestination = 0;
         }
-        public void setZoom(int value) { zoom = Mth.clamp(value, 0, 100); }
-        public void selectDestination(int value) { selectedDestination = Mth.clamp(value, 0, 12); }
+        public void setZoom(int value) {
+            zoom = Mth.clamp(value, 0, 100);
+            invalidateSonar();
+        }
+        public void selectDestination(int value) {
+            selectedDestination = Mth.clamp(value, 0, 12);
+            clearAvoidance();
+        }
         public void setManual(float forward, float vertical) {
             manualForward = Mth.clamp(forward, -1.0F, 1.0F);
             manualVertical = Mth.clamp(vertical, -1.0F, 1.0F);
         }
-        public void setBeamAngle(float angle) { beamAngle = angle; }
+        public void setBeamAngle(float angle) {
+            beamAngle = angle;
+            invalidateSonar();
+        }
+        public void setMaintainPos(BlockPos pos) {
+            maintainPos = pos;
+            clearAvoidance();
+        }
+        private void clearAvoidance() {
+            avoidanceX = 0;
+            avoidanceY = 0;
+            avoidanceZ = 0;
+            avoidanceTicks = 0;
+        }
+        private void invalidateSonar() {
+            sonarCache = null;
+            sonarCacheTick = Long.MIN_VALUE;
+        }
 
         CompoundTag toTag() {
             CompoundTag tag = new CompoundTag();
@@ -600,9 +982,14 @@ public final class NavigationWorldData extends SavedData {
         private final String name;
         private double forwardVelocity;
         private double verticalVelocity;
+        private double lateralVelocity;
         private double forwardAccumulator;
         private double verticalAccumulator;
+        private double lateralAccumulator;
         private long lastMoveTick;
+        private transient byte[] hullCache;
+        private transient Direction.Axis hullCacheAxis;
+        private transient long hullCacheTick = Long.MIN_VALUE;
 
         VesselState(UUID id, VesselMode mode, BlockPos min, BlockPos max, String name) {
             this(id, mode, min, max, min, name);
@@ -642,8 +1029,10 @@ public final class NavigationWorldData extends SavedData {
             tag.putString("Name", name);
             tag.putDouble("ForwardVelocity", forwardVelocity);
             tag.putDouble("VerticalVelocity", verticalVelocity);
+            tag.putDouble("LateralVelocity", lateralVelocity);
             tag.putDouble("ForwardAccumulator", forwardAccumulator);
             tag.putDouble("VerticalAccumulator", verticalAccumulator);
+            tag.putDouble("LateralAccumulator", lateralAccumulator);
             tag.putLong("LastMoveTick", lastMoveTick);
             return tag;
         }
@@ -657,8 +1046,10 @@ public final class NavigationWorldData extends SavedData {
                     BlockPos.of(tag.getLong("Origin")), tag.getString("Name"));
             vessel.forwardVelocity = tag.getDouble("ForwardVelocity");
             vessel.verticalVelocity = tag.getDouble("VerticalVelocity");
+            vessel.lateralVelocity = tag.getDouble("LateralVelocity");
             vessel.forwardAccumulator = tag.getDouble("ForwardAccumulator");
             vessel.verticalAccumulator = tag.getDouble("VerticalAccumulator");
+            vessel.lateralAccumulator = tag.getDouble("LateralAccumulator");
             vessel.lastMoveTick = tag.getLong("LastMoveTick");
             return vessel;
         }
@@ -685,7 +1076,11 @@ public final class NavigationWorldData extends SavedData {
         }
     }
 
+    private record SonarSnapshot(int[] obstacles, List<SonarContact> contacts,
+                                 List<HandSonarContact> handSonars) {}
+    private record SonarContact(float x, float y, float strength, String name, String kind) {}
+    private record HandSonarContact(float x, float y, String name, UUID uuid) {}
+    private record SonarProjection(float x, float y) {}
     private record BlockSnapshot(BlockPos pos, BlockState state, CompoundTag blockEntityTag) {}
-    private record MoveRequest(UUID vesselId, BlockPos terminalPos, int dx, int dy, int dz) {}
     private record Alias(long destination, long expiresAt) {}
 }

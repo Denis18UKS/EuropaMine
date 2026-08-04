@@ -35,6 +35,9 @@ public class ModItems {
     public static final RegistryObject<Item> SUBMARINE_BUILDER = ITEMS.register("submarine_builder",
             () -> new SubmarineBuilderItem(new Item.Properties().stacksTo(1)));
 
+    public static final RegistryObject<Item> ACTIVE_HAND_SONAR = ITEMS.register("active_hand_sonar",
+            () -> new Item(new Item.Properties().stacksTo(1)));
+
     public static final RegistryObject<Item> RED_WIRE_TOOL = ITEMS.register("red_wire_tool",
             () -> new WireToolItem(PowerWorldData.WireColor.RED, new Item.Properties().stacksTo(1)));
 

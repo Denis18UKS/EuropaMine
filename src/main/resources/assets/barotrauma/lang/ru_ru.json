@@ -51,5 +51,6 @@
   "message.barotrauma.session_started": "Сессия запущена. Выбрана подлодка: %s",
   "item.barotrauma.navigation_linker": "Привязчик навигационного управления",
   "item.barotrauma.submarine_builder": "Регистратор мультиблочной подлодки",
-  "gui.barotrauma.navigation_terminal": "Навигационный терминал"
+  "gui.barotrauma.navigation_terminal": "Навигационный терминал",
+  "item.barotrauma.active_hand_sonar": "Активный ручной сонар"
 }

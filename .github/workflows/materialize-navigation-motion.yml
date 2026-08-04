@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - codex/navigation-motion-sonar-fix
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:

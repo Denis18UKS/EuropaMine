@@ -3,6 +3,8 @@ package com.z_mods.barotrauma.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.hotbar.ExtraHotbar;
+import com.z_mods.barotrauma.network.HotbarPackets;
+import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -37,8 +39,33 @@ public final class ExtraHotbarClientEvents {
         public static void clientTick(TickEvent.ClientTickEvent event) {
             if (event.phase != TickEvent.Phase.END) return;
             Minecraft mc = Minecraft.getInstance();
-            if (mc.player == null || mc.screen != null) return;
-            while (SLOT_TEN.consumeClick()) select(mc, 9);
+            if (mc.player == null) return;
+
+            // Repair a client player copied from the unsafe build where selected could be 9..17.
+            if (mc.player.getInventory().selected >= ExtraHotbar.VANILLA_HOTBAR) {
+                int extra = mc.player.getInventory().selected - ExtraHotbar.VANILLA_HOTBAR;
+                mc.player.getInventory().selected = 0;
+                if (extra >= 0 && extra < ExtraHotbar.getClientAppliedCount()) selectExtra(extra);
+            } else if (mc.player.getInventory().selected < 0) {
+                mc.player.getInventory().selected = 0;
+            }
+
+            if (mc.screen != null) return;
+            while (SLOT_TEN.consumeClick()) selectExtra(0);
+        }
+
+        @SubscribeEvent
+        public static void keyInput(InputEvent.Key event) {
+            if (event.getAction() != GLFW.GLFW_PRESS) return;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null || mc.screen != null || ExtraHotbar.getClientSelectedExtra() < 0) return;
+            for (int i = 0; i < mc.options.keyHotbarSlots.length; i++) {
+                if (mc.options.keyHotbarSlots[i].matches(event.getKey(), event.getScanCode())) {
+                    ExtraHotbar.setClientSelectedExtra(-1);
+                    ModNetworking.CHANNEL.sendToServer(new HotbarPackets.ServerboundSelectExtra(-1));
+                    return;
+                }
+            }
         }
 
         @SubscribeEvent
@@ -46,19 +73,32 @@ public final class ExtraHotbarClientEvents {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null || mc.screen != null || event.getScrollDelta() == 0.0D) return;
             int total = ExtraHotbar.VANILLA_HOTBAR + ExtraHotbar.getClientAppliedCount();
-            if (total <= 9) return;
-            int current = mc.player.getInventory().selected;
+            if (total <= ExtraHotbar.VANILLA_HOTBAR) return;
+
+            int extraSelected = ExtraHotbar.getClientSelectedExtra();
+            int current = extraSelected >= 0
+                    ? ExtraHotbar.VANILLA_HOTBAR + extraSelected
+                    : mc.player.getInventory().selected;
             if (current < 0 || current >= total) current = 0;
             int delta = event.getScrollDelta() > 0 ? -1 : 1;
-            select(mc, Math.floorMod(current + delta, total));
+            int target = Math.floorMod(current + delta, total);
+            if (target < ExtraHotbar.VANILLA_HOTBAR) selectVanilla(mc, target);
+            else selectExtra(target - ExtraHotbar.VANILLA_HOTBAR);
             event.setCanceled(true);
         }
 
-        private static void select(Minecraft mc, int slot) {
-            int total = ExtraHotbar.VANILLA_HOTBAR + ExtraHotbar.getClientAppliedCount();
-            if (slot < 0 || slot >= total || mc.player == null) return;
+        private static void selectVanilla(Minecraft mc, int slot) {
+            if (mc.player == null || slot < 0 || slot >= ExtraHotbar.VANILLA_HOTBAR) return;
+            ExtraHotbar.setClientSelectedExtra(-1);
             mc.player.getInventory().selected = slot;
             if (mc.getConnection() != null) mc.getConnection().send(new ServerboundSetCarriedItemPacket(slot));
+        }
+
+        private static void selectExtra(int extraIndex) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null || extraIndex < 0 || extraIndex >= ExtraHotbar.getClientAppliedCount()) return;
+            ExtraHotbar.setClientSelectedExtra(extraIndex);
+            ModNetworking.CHANNEL.sendToServer(new HotbarPackets.ServerboundSelectExtra(extraIndex));
         }
 
         @SubscribeEvent
@@ -73,7 +113,7 @@ public final class ExtraHotbarClientEvents {
             for (int i = 0; i < count; i++) {
                 int x = baseX + HotbarLayoutSettings.x(i);
                 int y = baseY + HotbarLayoutSettings.y(i);
-                boolean selected = mc.player.getInventory().selected == 9 + i;
+                boolean selected = ExtraHotbar.getClientSelectedExtra() == i;
                 drawRealSlot(g, mc, i, x, y, selected);
             }
         }
@@ -98,13 +138,10 @@ public final class ExtraHotbarClientEvents {
         private static void drawRealSlot(GuiGraphics g, Minecraft mc, int extraIndex, int x, int y, boolean selected) {
             g.fill(x, y, x + 20, y + 20, 0xD0111716);
             g.renderOutline(x, y, 20, 20, selected ? 0xFFF3D680 : 0xFF50665F);
-            int inventoryIndex = ExtraHotbar.inventoryIndex(extraIndex);
-            if (inventoryIndex < mc.player.getInventory().items.size()) {
-                ItemStack stack = mc.player.getInventory().items.get(inventoryIndex);
-                if (!stack.isEmpty()) {
-                    g.renderItem(stack, x + 2, y + 2);
-                    g.renderItemDecorations(mc.font, stack, x + 2, y + 2);
-                }
+            ItemStack stack = ExtraHotbar.getStack(mc.player, extraIndex);
+            if (!stack.isEmpty()) {
+                g.renderItem(stack, x + 2, y + 2);
+                g.renderItemDecorations(mc.font, stack, x + 2, y + 2);
             }
             if (selected) g.renderOutline(x - 2, y - 2, 24, 24, 0xFFFFFFFF);
             if (extraIndex == 0) g.drawString(mc.font, "0", x + 12, y + 2, 0xFFA9B4B0, false);

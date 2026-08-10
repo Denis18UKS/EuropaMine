@@ -30,7 +30,9 @@ jobs:
             exit 0
           fi
 
+          for f in .task2chunks/c*; do printf '%s ' "$f"; git hash-object "$f"; done
           cat .task2chunks/c* | tr -d '\r\n' | base64 --decode > /tmp/task2-overlay.zip
+          sha256sum /tmp/task2-overlay.zip
           echo "573d042b8de3417229f61d92512238ca0f8ff35212d8c12f6a65d52d4d0793fa  /tmp/task2-overlay.zip" | sha256sum -c -
           unzip -oq /tmp/task2-overlay.zip -d .
           rm -rf .task2 .task2chunks

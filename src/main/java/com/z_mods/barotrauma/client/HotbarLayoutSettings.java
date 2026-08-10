@@ -10,7 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
-/** Client-side draft layout. Save does not apply the server slot count; Apply does. */
+/** Client-side draft layout: Save stores the draft; Apply stores it and synchronizes the slot count with the server. */
 public final class HotbarLayoutSettings {
     private static final Path PATH = Minecraft.getInstance().gameDirectory.toPath()
             .resolve("config").resolve("barotrauma_extra_hotbar.properties");

@@ -10,18 +10,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/** Vanilla carried-item packets are only ever allowed to select slots 0..8. */
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class ServerGamePacketListenerHotbarMixin {
     @Shadow public ServerPlayer player;
 
-    @Inject(method = "handleSetCarriedItem", at = @At("HEAD"), cancellable = true)
-    private void barotrauma$acceptExtraHotbar(ServerboundSetCarriedItemPacket packet, CallbackInfo ci) {
-        int slot = packet.getSlot();
-        int max = ExtraHotbar.VANILLA_HOTBAR + ExtraHotbar.getAppliedCount(player);
-        if (slot >= ExtraHotbar.VANILLA_HOTBAR && slot < max) {
-            player.getInventory().selected = slot;
-            player.resetLastActionTime();
-            ci.cancel();
-        }
+    @Inject(method = "handleSetCarriedItem", at = @At("HEAD"))
+    private void barotrauma$clearVirtualSelection(ServerboundSetCarriedItemPacket packet, CallbackInfo ci) {
+        ExtraHotbar.clearSelectedExtra(player);
+        ExtraHotbar.sanitizeVanillaSelected(player);
     }
 }

@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f .task2chunks/c00 ]; then
+          if [ ! -f .task2chunks/c00a ]; then
             echo "Пакет уже развёрнут."
             exit 0
           fi

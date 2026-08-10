@@ -11,6 +11,11 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.Container;
+import net.minecraft.world.ContainerHelper;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.NonNullList;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.joml.Vector3f;
 
@@ -36,6 +41,7 @@ public final class PowerWorldData extends SavedData {
 
     private final Map<Long, String> bindings = new HashMap<>();
     private final Map<Long, MachineState> machines = new HashMap<>();
+    private final Map<Long, VirtualVentState> virtualVents = new HashMap<>();
     private final Set<WireConnection> wires = new HashSet<>();
     private long ticks;
 
@@ -58,6 +64,10 @@ public final class PowerWorldData extends SavedData {
         return state;
     }
 
+    public VirtualVentState virtualVentOrCreate(BlockPos pos) {
+        return virtualVents.computeIfAbsent(pos.asLong(), ignored -> new VirtualVentState(this));
+    }
+
     public void bind(BlockPos pos, String guiId) {
         bindings.put(pos.asLong(), guiId);
         if (REACTOR_GUI.equals(guiId) || ELECTRICAL_PANEL_GUI.equals(guiId)) {
@@ -65,12 +75,15 @@ public final class PowerWorldData extends SavedData {
         } else {
             machines.remove(pos.asLong());
         }
+        if ("vent".equals(guiId)) virtualVentOrCreate(pos);
+        else virtualVents.remove(pos.asLong());
         setDirty();
     }
 
     public boolean unbind(BlockPos pos) {
         boolean changed = bindings.remove(pos.asLong()) != null;
         changed |= machines.remove(pos.asLong()) != null;
+        changed |= virtualVents.remove(pos.asLong()) != null;
         if (changed) setDirty();
         return changed;
     }
@@ -176,6 +189,14 @@ public final class PowerWorldData extends SavedData {
         }
         machines.clear();
         machines.putAll(movedMachines);
+
+        Map<Long, VirtualVentState> movedVents = new HashMap<>();
+        for (Map.Entry<Long, VirtualVentState> entry : virtualVents.entrySet()) {
+            BlockPos pos = BlockPos.of(entry.getKey());
+            movedVents.put((inside(pos, min, max) ? pos.offset(dx, dy, dz) : pos).asLong(), entry.getValue());
+        }
+        virtualVents.clear();
+        virtualVents.putAll(movedVents);
 
         Set<WireConnection> movedWires = new HashSet<>();
         for (WireConnection wire : wires) {
@@ -304,6 +325,15 @@ public final class PowerWorldData extends SavedData {
         }
         tag.put("Machines", machinesTag);
 
+        ListTag ventsTag = new ListTag();
+        for (Map.Entry<Long, VirtualVentState> entry : virtualVents.entrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.putLong("Pos", entry.getKey());
+            entry.getValue().save(row);
+            ventsTag.add(row);
+        }
+        tag.put("VirtualVents", ventsTag);
+
         ListTag wiresTag = new ListTag();
         for (WireConnection wire : wires) {
             CompoundTag row = new CompoundTag();
@@ -328,6 +358,11 @@ public final class PowerWorldData extends SavedData {
             CompoundTag row = machinesTag.getCompound(i);
             data.machines.put(row.getLong("Pos"), MachineState.fromTag(row));
         }
+        ListTag ventsTag = tag.getList("VirtualVents", Tag.TAG_COMPOUND);
+        for (int i = 0; i < ventsTag.size(); i++) {
+            CompoundTag row = ventsTag.getCompound(i);
+            data.virtualVents.put(row.getLong("Pos"), VirtualVentState.load(data, row));
+        }
         ListTag wiresTag = tag.getList("Wires", Tag.TAG_COMPOUND);
         for (int i = 0; i < wiresTag.size(); i++) {
             CompoundTag row = wiresTag.getCompound(i);
@@ -335,6 +370,33 @@ public final class PowerWorldData extends SavedData {
             data.wires.add(WireConnection.normalized(row.getLong("A"), row.getLong("B"), WireColor.values()[color]));
         }
         return data;
+    }
+
+    public static final class VirtualVentState implements Container {
+        public static final int SIZE = 27;
+        private final PowerWorldData owner;
+        private final NonNullList<ItemStack> items = NonNullList.withSize(SIZE, ItemStack.EMPTY);
+        private int lockedSlots;
+
+        private VirtualVentState(PowerWorldData owner) { this.owner = owner; }
+        public int getLockedSlots() { return lockedSlots; }
+        public boolean toggleSlotLocked(int slot) {
+            if (slot < 0 || slot >= SIZE) return false;
+            lockedSlots ^= 1 << slot; owner.setDirty(); return true;
+        }
+        @Override public int getContainerSize() { return SIZE; }
+        @Override public boolean isEmpty() { for (ItemStack stack : items) if (!stack.isEmpty()) return false; return true; }
+        @Override public ItemStack getItem(int slot) { return items.get(slot); }
+        @Override public ItemStack removeItem(int slot, int amount) { ItemStack result = ContainerHelper.removeItem(items, slot, amount); if (!result.isEmpty()) setChanged(); return result; }
+        @Override public ItemStack removeItemNoUpdate(int slot) { ItemStack result = ContainerHelper.takeItem(items, slot); if (!result.isEmpty()) setChanged(); return result; }
+        @Override public void setItem(int slot, ItemStack stack) { items.set(slot, stack); if (stack.getCount() > getMaxStackSize()) stack.setCount(getMaxStackSize()); setChanged(); }
+        @Override public void setChanged() { owner.setDirty(); }
+        @Override public boolean stillValid(Player player) { return true; }
+        @Override public void clearContent() { items.clear(); setChanged(); }
+        private void save(CompoundTag tag) { tag.putInt("Locked", lockedSlots); ContainerHelper.saveAllItems(tag, items); }
+        private static VirtualVentState load(PowerWorldData owner, CompoundTag tag) {
+            VirtualVentState state = new VirtualVentState(owner); state.lockedSlots = tag.getInt("Locked"); ContainerHelper.loadAllItems(tag, state.items); return state;
+        }
     }
 
     public enum WireColor {

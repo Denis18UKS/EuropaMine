@@ -182,6 +182,8 @@ public final class NavigationPackets {
             }
             case "manual" -> terminal.setManual(packet.x, packet.y);
             case "beam" -> terminal.setBeamAngle(packet.x);
+            case "template" -> terminal.toggleTemplate();
+            case "section_action" -> terminal.setSectionAction(Math.round(packet.x), Math.round(packet.y), packet.value);
             case "shutdown_reactor" -> {
                 int count = NavigationSystem.shutdownReactors(level, terminalPos);
                 level.playSound(null, terminalPos, SoundEvents.LEVER_CLICK, SoundSource.BLOCKS, 0.8F, 0.55F);

@@ -9,15 +9,21 @@ import com.z_mods.barotrauma.item.WireToolItem;
 import com.z_mods.barotrauma.navigation.NavigationSystem;
 import com.z_mods.barotrauma.navigation.NavigationWorldData;
 import com.z_mods.barotrauma.network.PanelNetworkSync;
+import com.z_mods.barotrauma.network.HotbarPackets;
+import com.z_mods.barotrauma.network.UtilityPackets;
+import com.z_mods.barotrauma.menu.VentMenu;
+import net.minecraftforge.network.NetworkHooks;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import com.z_mods.barotrauma.network.PowerPackets;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
@@ -37,7 +43,8 @@ public final class PowerSystem {
             new GuiEntry("settings_panel", "Панель настроек игры"),
             new GuiEntry("vent", "Интерактивная вентиляция"),
             new GuiEntry(NavigationWorldData.NAVIGATION_GUI, "Навигационный терминал"),
-            new GuiEntry("structure_config", "Настройка конструкции")
+            new GuiEntry("structure_config", "Настройка конструкции"),
+            new GuiEntry("hotbar_layout_panel", "Настройка слотов хотбара")
     );
 
     private PowerSystem() {
@@ -59,7 +66,8 @@ public final class PowerSystem {
         if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof ServerPlayer player)) return;
         ItemStack held = event.getItemStack();
         if (held.getItem() instanceof GuiBinderItem || held.getItem() instanceof WireToolItem
-                || held.getItem() instanceof NavigationLinkerItem || held.getItem() instanceof SubmarineBuilderItem) return;
+                || held.getItem() instanceof NavigationLinkerItem || held.getItem() instanceof SubmarineBuilderItem
+                || held.getItem() instanceof com.z_mods.barotrauma.item.SubmarineDrawingToolItem) return;
 
         BlockPos pos = event.getPos();
         String guiId = PowerWorldData.get(level).guiAt(pos);
@@ -89,16 +97,15 @@ public final class PowerSystem {
             }
             case "settings_panel" -> PanelNetworkSync.openSettings(player);
             case NavigationWorldData.NAVIGATION_GUI -> NavigationSystem.open(player, level, pos);
-            case "vent", "structure_config" -> openNativeBlockGui(player, level, pos, hit);
+            case "vent" -> NetworkHooks.openScreen(player, new MenuProvider() {
+                @Override public Component getDisplayName() { return Component.literal("Вентиляция"); }
+                @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player owner) {
+                    return new VentMenu(id, inventory, pos);
+                }
+            }, buffer -> buffer.writeBlockPos(pos));
+            case "structure_config" -> UtilityPackets.openStructureConfig(player);
+            case "hotbar_layout_panel" -> HotbarPackets.open(player);
             default -> player.displayClientMessage(Component.literal("Неизвестный GUI: " + guiId), true);
-        }
-    }
-
-    private static void openNativeBlockGui(ServerPlayer player, ServerLevel level, BlockPos pos, BlockHitResult hit) {
-        BlockState state = level.getBlockState(pos);
-        InteractionResult result = state.use(level, player, InteractionHand.MAIN_HAND, hit);
-        if (!result.consumesAction()) {
-            player.displayClientMessage(Component.literal("Этот GUI требует родной блок соответствующего типа."), true);
         }
     }
 

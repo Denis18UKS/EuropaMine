@@ -44,8 +44,10 @@ public final class NavigationWorldData extends SavedData {
     private static final int SONAR_RAYS = 96;
     private static final int SONAR_REFRESH_TICKS = 10;
     private static final double SONAR_STEP = 3.0D;
-    private static final int STATUS_COLUMNS = 32;
-    private static final int STATUS_ROWS = 12;
+    private static final int STATUS_COLUMNS = 64;
+    private static final int STATUS_ROWS = 24;
+    private static final int TEMPLATE_COLUMNS = 48;
+    private static final int TEMPLATE_ROWS = 18;
     private static final double MAX_FORWARD_SPEED = 0.16D;
     private static final double MAX_LATERAL_SPEED = 0.13D;
     private static final double MAX_VERTICAL_SPEED = 0.11D;
@@ -540,6 +542,8 @@ public final class NavigationWorldData extends SavedData {
         tag.putFloat("ManualForward", terminal.manualForward);
         tag.putFloat("ManualVertical", terminal.manualVertical);
         tag.putFloat("BeamAngle", terminal.beamAngle);
+        tag.putBoolean("TemplateMode", terminal.templateMode);
+        tag.putByteArray("SectionActions", terminal.sectionActions.clone());
 
         if (vessel == null) {
             tag.putBoolean("Linked", false);
@@ -547,7 +551,15 @@ public final class NavigationWorldData extends SavedData {
             tag.putIntArray("Sonar", new int[SONAR_RAYS]);
             tag.put("Contacts", new ListTag());
             tag.put("HandSonars", new ListTag());
-            tag.putByteArray("HullGrid", new byte[STATUS_COLUMNS * STATUS_ROWS]);
+            if (terminal.templateMode) {
+                tag.putByteArray("HullGrid", templateHullGrid());
+                tag.putInt("HullColumns", TEMPLATE_COLUMNS);
+                tag.putInt("HullRows", TEMPLATE_ROWS);
+            } else {
+                tag.putByteArray("HullGrid", new byte[32 * 12]);
+                tag.putInt("HullColumns", 32);
+                tag.putInt("HullRows", 12);
+            }
             putTargets(level, tag, terminal, terminalPos);
             return tag;
         }
@@ -572,9 +584,10 @@ public final class NavigationWorldData extends SavedData {
         tag.putIntArray("Sonar", sonar.obstacles);
         putSonarContacts(tag, sonar.contacts);
         putHandSonars(tag, sonar.handSonars);
+        Direction.Axis hullAxis = facingAt(level, terminalPos).getAxis();
         tag.putByteArray("HullGrid", buildHullGridCached(level, terminalPos, vessel));
-        tag.putInt("HullColumns", STATUS_COLUMNS);
-        tag.putInt("HullRows", STATUS_ROWS);
+        tag.putInt("HullColumns", hullColumns(vessel, hullAxis));
+        tag.putInt("HullRows", hullRows(vessel));
         putCrew(level, tag, terminalPos, vessel);
         putTargets(level, tag, terminal, anchor);
         return tag;
@@ -748,22 +761,58 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private byte[] buildHullGrid(ServerLevel level, BlockPos terminalPos, VesselState vessel) {
-        byte[] grid = new byte[STATUS_COLUMNS * STATUS_ROWS];
         Direction facing = facingAt(level, terminalPos);
-        int horizontalMin = facing.getAxis() == Direction.Axis.X ? vessel.min.getX() : vessel.min.getZ();
-        int horizontalMax = facing.getAxis() == Direction.Axis.X ? vessel.max.getX() : vessel.max.getZ();
+        Direction.Axis axis = facing.getAxis();
+        int columns = hullColumns(vessel, axis);
+        int rows = hullRows(vessel);
+        byte[] grid = new byte[columns * rows];
+        int horizontalMin = axis == Direction.Axis.X ? vessel.min.getX() : vessel.min.getZ();
+        int horizontalMax = axis == Direction.Axis.X ? vessel.max.getX() : vessel.max.getZ();
         int horizontalSize = Math.max(1, horizontalMax - horizontalMin + 1);
         int verticalSize = Math.max(1, vessel.max.getY() - vessel.min.getY() + 1);
 
         for (BlockPos cursor : BlockPos.betweenClosed(vessel.min, vessel.max)) {
             BlockState state = level.getBlockState(cursor);
             if (state.isAir() && state.getFluidState().isEmpty()) continue;
-            int horizontal = facing.getAxis() == Direction.Axis.X ? cursor.getX() : cursor.getZ();
-            int column = Mth.clamp((horizontal - horizontalMin) * STATUS_COLUMNS / horizontalSize, 0, STATUS_COLUMNS - 1);
-            int row = Mth.clamp((vessel.max.getY() - cursor.getY()) * STATUS_ROWS / verticalSize, 0, STATUS_ROWS - 1);
-            int index = row * STATUS_COLUMNS + column;
-            if (!state.getFluidState().isEmpty()) grid[index] = 2;
-            else if (grid[index] == 0) grid[index] = 1;
+            int horizontal = axis == Direction.Axis.X ? cursor.getX() : cursor.getZ();
+            int column = Mth.clamp((horizontal - horizontalMin) * columns / horizontalSize, 0, columns - 1);
+            int row = Mth.clamp((vessel.max.getY() - cursor.getY()) * rows / verticalSize, 0, rows - 1);
+            int index = row * columns + column;
+            if (!state.getFluidState().isEmpty()) {
+                // Water is only promoted to flooding when the projected cell already belongs to
+                // the real construction. This avoids painting the entire surrounding ocean orange.
+                if (grid[index] == 1) grid[index] = 2;
+            } else {
+                grid[index] = grid[index] == 2 ? (byte)2 : (byte)1;
+            }
+        }
+        return grid;
+    }
+
+    private int hullColumns(VesselState vessel, Direction.Axis axis) {
+        int size = axis == Direction.Axis.X
+                ? vessel.max.getX() - vessel.min.getX() + 1
+                : vessel.max.getZ() - vessel.min.getZ() + 1;
+        return Mth.clamp(size, 1, STATUS_COLUMNS);
+    }
+
+    private int hullRows(VesselState vessel) {
+        return Mth.clamp(vessel.max.getY() - vessel.min.getY() + 1, 1, STATUS_ROWS);
+    }
+
+    private static byte[] templateHullGrid() {
+        byte[] grid = new byte[TEMPLATE_COLUMNS * TEMPLATE_ROWS];
+        int mid = TEMPLATE_ROWS / 2;
+        for (int x = 3; x < TEMPLATE_COLUMNS - 3; x++) {
+            int taper = Math.min(x - 3, TEMPLATE_COLUMNS - 4 - x);
+            int half = Math.max(2, Math.min(6, 2 + taper / 4));
+            for (int y = mid - half; y <= mid + half; y++) {
+                if (y >= 0 && y < TEMPLATE_ROWS) grid[y * TEMPLATE_COLUMNS + x] = 1;
+            }
+        }
+        for (int x = TEMPLATE_COLUMNS / 2 - 4; x <= TEMPLATE_COLUMNS / 2 + 4; x++) {
+            int y = mid - 7;
+            if (y >= 0) grid[y * TEMPLATE_COLUMNS + x] = 1;
         }
         return grid;
     }
@@ -878,6 +927,8 @@ public final class NavigationWorldData extends SavedData {
         private float manualVertical;
         private float beamAngle;
         private BlockPos maintainPos;
+        private boolean templateMode;
+        private byte[] sectionActions = new byte[STATUS_COLUMNS * STATUS_ROWS];
         private transient BlockPos currentTerminalPos;
         private transient int avoidanceX;
         private transient int avoidanceY;
@@ -931,6 +982,14 @@ public final class NavigationWorldData extends SavedData {
             maintainPos = pos;
             clearAvoidance();
         }
+        public void toggleTemplate() { templateMode = !templateMode; }
+        public boolean templateMode() { return templateMode; }
+        public void setSectionAction(int column, int row, int action) {
+            if (column < 0 || column >= STATUS_COLUMNS || row < 0 || row >= STATUS_ROWS) return;
+            int index = row * STATUS_COLUMNS + column;
+            byte encoded = (byte)(Mth.clamp(action, 0, 5) + 1);
+            sectionActions[index] = sectionActions[index] == encoded ? 0 : encoded;
+        }
         private void clearAvoidance() {
             avoidanceX = 0;
             avoidanceY = 0;
@@ -953,6 +1012,8 @@ public final class NavigationWorldData extends SavedData {
             tag.putFloat("ManualForward", manualForward);
             tag.putFloat("ManualVertical", manualVertical);
             tag.putFloat("BeamAngle", beamAngle);
+            tag.putBoolean("TemplateMode", templateMode);
+            tag.putByteArray("SectionActions", sectionActions);
             if (maintainPos != null) tag.putLong("MaintainPos", maintainPos.asLong());
             return tag;
         }
@@ -968,6 +1029,9 @@ public final class NavigationWorldData extends SavedData {
             state.manualForward = tag.getFloat("ManualForward");
             state.manualVertical = tag.getFloat("ManualVertical");
             state.beamAngle = tag.getFloat("BeamAngle");
+            state.templateMode = tag.getBoolean("TemplateMode");
+            byte[] actions = tag.getByteArray("SectionActions");
+            if (actions.length > 0) System.arraycopy(actions, 0, state.sectionActions, 0, Math.min(actions.length, state.sectionActions.length));
             if (tag.contains("MaintainPos")) state.maintainPos = BlockPos.of(tag.getLong("MaintainPos"));
             return state;
         }

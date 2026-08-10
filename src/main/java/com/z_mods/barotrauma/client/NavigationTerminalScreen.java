@@ -32,6 +32,12 @@ public final class NavigationTerminalScreen extends Screen {
     private static final int SONAR_CX = 912;
     private static final int SONAR_CY = 352;
     private static final int SONAR_RADIUS = 289;
+    private static final int[] STATUS_ACTION_COLORS = {
+            0xFF71849A, 0xFFE1C000, 0xFFE66A12, 0xFF819077, 0xFF8E6194, 0xFFB64D53
+    };
+    private static final String[] STATUS_ACTION_NAMES = {
+            "КОРПУС", "ЭЛЕКТРИКА", "ПОЖАР", "ЗАТОПЛЕНИЕ", "ЭКИПАЖ", "АВАРИЯ"
+    };
 
     private BlockPos terminalPos;
     private CompoundTag state;
@@ -41,6 +47,7 @@ public final class NavigationTerminalScreen extends Screen {
     private float displayedVertical;
     private boolean draggingZoom;
     private boolean draggingBeam;
+    private int selectedStatusAction;
 
     private NavigationTerminalScreen(BlockPos terminalPos, CompoundTag state) {
         super(Component.literal("Навигационный терминал"));
@@ -106,37 +113,46 @@ public final class NavigationTerminalScreen extends Screen {
     }
 
     private void renderStatusMonitor(GuiGraphics g) {
-        int x1 = 66;
-        int y1 = 147;
-        int x2 = 530;
-        int y2 = 328;
-        g.fill(x1, y1, x2, y2, 0xD9000403);
+        int x1 = 66, y1 = 147, x2 = 530, y2 = 328;
+        g.fill(x1, y1, x2, y2, 0xDD000403);
+        g.renderOutline(x1, y1, x2 - x1, y2 - y1, 0xFF28453D);
 
         byte[] cells = state.getByteArray("HullGrid");
         int columns = Math.max(1, state.getInt("HullColumns"));
         int rows = Math.max(1, state.getInt("HullRows"));
-        if (columns <= 1 || rows <= 1 || cells.length < columns * rows) {
-            columns = 32;
-            rows = 12;
-        }
-        int cellW = Math.max(2, (x2 - x1 - 34) / columns);
-        int cellH = Math.max(2, (y2 - y1 - 42) / rows);
-        int originX = x1 + 17;
-        int originY = y1 + 22;
+        if (cells.length < columns * rows) { columns = 32; rows = 12; }
+        int availableW = x2 - x1 - 34;
+        int availableH = y2 - y1 - 42;
+        float cellW = availableW / (float)Math.max(1, columns);
+        float cellH = availableH / (float)Math.max(1, rows);
+        float cell = Math.max(2.0F, Math.min(cellW, cellH));
+        int gridW = Math.round(cell * columns);
+        int gridH = Math.round(cell * rows);
+        int originX = x1 + (x2 - x1 - gridW) / 2;
+        int originY = y1 + 20 + Math.max(0, (availableH - gridH) / 2);
+        byte[] actions = state.getByteArray("SectionActions");
         boolean hasHull = false;
         for (int row = 0; row < rows; row++) {
             for (int column = 0; column < columns; column++) {
                 int index = row * columns + column;
                 if (index >= cells.length || cells[index] == 0) continue;
                 hasHull = true;
-                int px = originX + column * cellW;
-                int py = originY + row * cellH;
-                int color = cells[index] == 2 ? 0xD9E57B18 : 0xD900B58B;
-                g.fill(px, py, px + Math.max(1, cellW - 1), py + Math.max(1, cellH - 1), color);
+                int px = originX + Math.round(column * cell);
+                int py = originY + Math.round(row * cell);
+                int pw = Math.max(2, Math.round(cell));
+                int ph = Math.max(2, Math.round(cell));
+                int color = cells[index] == 2 ? 0xE5E57B18 : 0xE500B58B;
+                int actionIndex = row * 64 + column;
+                if (actionIndex < actions.length && actions[actionIndex] > 0) {
+                    int action = Mth.clamp(actions[actionIndex] - 1, 0, STATUS_ACTION_COLORS.length - 1);
+                    color = STATUS_ACTION_COLORS[action];
+                }
+                g.fill(px, py, px + pw - 1, py + ph - 1, color);
             }
         }
         if (!hasHull) {
-            drawSubmarineOutline(g, 300, 235, 175, 0x8A2FC9A0);
+            drawSubmarineOutline(g, 298, 235, 175, 0xB02FC9A0);
+            drawScaledText(g, "ПОДЛОДКА НЕ ПРИВЯЗАНА", 218, 207, 1.25F, 0xFFFFA53C);
         }
 
         ListTag crew = state.getList("Crew", Tag.TAG_COMPOUND);
@@ -145,17 +161,30 @@ public final class NavigationTerminalScreen extends Screen {
             int px = Mth.floor(Mth.lerp(row.getFloat("X"), x1 + 15, x2 - 31));
             int py = Mth.floor(Mth.lerp(row.getFloat("Y"), y1 + 16, y2 - 32));
             ResourceLocation skin = skin(row);
-            if (skin != null) {
-                PlayerFaceRenderer.draw(g, skin, px, py, 16, true, false);
-            } else {
-                fillCircle(g, px + 8, py + 8, 8, 0xFF9FBAB1);
-                String name = row.getString("Name");
-                if (!name.isBlank()) g.drawCenteredString(font, name.substring(0, 1).toUpperCase(Locale.ROOT), px + 8, py + 4, 0xFF15201C);
-            }
+            if (skin != null) PlayerFaceRenderer.draw(g, skin, px, py, 16, true, false);
+            else fillCircle(g, px + 8, py + 8, 8, 0xFF9FBAB1);
         }
 
+        // The six reference icons are action selectors. Their original artwork remains in FRAME;
+        // this overlay supplies selection, click feedback and a readable action name.
+        for (int i = 0; i < 6; i++) {
+            int cx = 200 + i * 45;
+            int cy = 360;
+            if (selectedStatusAction == i) {
+                g.renderOutline(cx - 18, cy - 18, 36, 36, 0xFFF2E6B1);
+                g.renderOutline(cx - 20, cy - 20, 40, 40, STATUS_ACTION_COLORS[i]);
+            }
+        }
+        g.fill(72, 333, 504, 348, 0xC8000806);
+        drawScaledText(g, "ДЕЙСТВИЕ: " + STATUS_ACTION_NAMES[selectedStatusAction], 82, 336, 1.15F,
+                STATUS_ACTION_COLORS[selectedStatusAction]);
+
+        boolean template = state.getBoolean("TemplateMode");
+        g.fill(430, 112, 532, 139, template ? 0xFF315A50 : 0xFF16221F);
+        g.renderOutline(430, 112, 102, 27, template ? 0xFF7DE0C5 : 0xFF51665F);
+        g.drawCenteredString(font, template ? "ШАБЛОН: ВКЛ" : "ШАБЛОН", 481, 121, 0xFFF0E2AE);
         if (state.getBoolean("Docked")) {
-            g.drawCenteredString(font, "ПОДКЛЮЧЕНО К СТАНЦИИ", (x1 + x2) / 2, 305, 0xFF9ACBC0);
+            drawScaledText(g, "ПОДКЛЮЧЕНО К СТАНЦИИ", 190, 307, 1.15F, 0xFF9ACBC0);
         }
     }
 
@@ -293,14 +322,14 @@ public final class NavigationTerminalScreen extends Screen {
             fillCircle(g, x, y, 4, 0xFFC7C6AE);
             String label = target.getString("Name");
             int distance = target.getInt("Distance");
-            int width = Math.min(145, Math.max(75, font.width(label) + 8));
+            int width = Math.min(180, Math.max(92, Math.round(font.width(trim(label, 20)) * 1.2F) + 10));
             int lx = x + 6;
             if (lx + width > SONAR_CX + SONAR_RADIUS) lx = x - width - 6;
-            g.fill(lx, y - 21, lx + width, y + 13, 0xB5000000);
-            g.drawString(font, trim(label, 20), lx + 3, y - 18, 0xFF9CC8DB, false);
+            g.fill(lx, y - 27, lx + width, y + 17, 0xC5000000);
+            drawScaledText(g, trim(label, 20), lx + 4, y - 24, 1.2F, 0xFFB9E4F3);
             String mission = target.getString("Mission");
-            if (!mission.isBlank()) g.drawString(font, trim(mission, 20), lx + 3, y - 8, 0xFF728D97, false);
-            g.drawString(font, distance + " м", lx + 3, y + 2, 0xFF9CC8DB, false);
+            if (!mission.isBlank()) drawScaledText(g, trim(mission, 20), lx + 4, y - 12, 1.1F, 0xFF86AAB5);
+            drawScaledText(g, distance + " м", lx + 4, y + 1, 1.1F, 0xFFB9E4F3);
         }
     }
 
@@ -339,7 +368,7 @@ public final class NavigationTerminalScreen extends Screen {
             int y = 367 + i * 32;
             circle(g, 1350, y, 12, autopilot ? 0xFF66CDBB : 0xFF263D38, 3);
             if (selected == i) fillCircle(g, 1350, y, 6, autopilot ? 0xFF66CDBB : 0xFF263D38);
-            g.drawString(font, trim(labels.get(i), 24), 1375, y - 5, autopilot ? 0xFFE7D9A1 : 0xFF4A4E49, false);
+            drawScaledText(g, trim(labels.get(i), 24), 1375, y - 7, 1.18F, autopilot ? 0xFFE7D9A1 : 0xFF4A4E49);
         }
 
         String tip = autopilot
@@ -357,16 +386,21 @@ public final class NavigationTerminalScreen extends Screen {
 
     private void renderPowerWarning(GuiGraphics g) {
         if (state.getBoolean("Powered")) return;
-        g.fill(115, 210, 505, 263, 0xA5000000);
-        g.drawCenteredString(font, "ВНИМАНИЕ: НЕДОСТАТОЧНО ЭНЕРГИИ", 310, 229, 0xFFFFA000);
+        g.fill(105, 205, 515, 268, 0xC5000000);
+        drawScaledCenteredText(g, "ВНИМАНИЕ: НЕДОСТАТОЧНО ЭНЕРГИИ", 310, 228, 1.35F, 0xFFFFA000);
     }
 
     private void drawDigital(GuiGraphics g, int x, int y, double value) {
         g.fill(x, y, x + 113, y + 36, 0xFF0A100A);
         g.fill(x + 5, y + 4, x + 108, y + 31, 0xFFB7C99C);
         String text = Math.abs(value) >= 100.0D ? String.format(Locale.ROOT, "%.0f", value) : String.format(Locale.ROOT, "%.1f", value);
-        int textWidth = font.width(text);
-        g.drawString(font, text, x + 101 - textWidth, y + 13, 0xFF18221A, false);
+        float textScale = 1.55F;
+        int textWidth = Math.round(font.width(text) * textScale);
+        g.pose().pushPose();
+        g.pose().translate(x + 101 - textWidth, y + 8, 0.0F);
+        g.pose().scale(textScale, textScale, 1.0F);
+        g.drawString(font, text, 0, 0, 0xFF18221A, false);
+        g.pose().popPose();
     }
 
     private void drawVerticalSwitch(GuiGraphics g, int x, int y, boolean bottom) {
@@ -426,9 +460,22 @@ public final class NavigationTerminalScreen extends Screen {
         return value.substring(0, Math.max(1, maximum - 1)) + "…";
     }
 
+    private void drawScaledText(GuiGraphics g, String value, int x, int y, float scale, int color) {
+        g.pose().pushPose();
+        g.pose().translate(x, y, 0.0F);
+        g.pose().scale(scale, scale, 1.0F);
+        g.drawString(font, value, 0, 0, color, false);
+        g.pose().popPose();
+    }
+
+    private void drawScaledCenteredText(GuiGraphics g, String value, int centerX, int y, float scale, int color) {
+        int width = Math.round(font.width(value) * scale);
+        drawScaledText(g, value, centerX - width / 2, y, scale, color);
+    }
+
     private void drawCenteredMultiline(GuiGraphics g, String value, int x, int y, int color) {
         String[] lines = value.split("\\n");
-        for (int i = 0; i < lines.length; i++) g.drawCenteredString(font, lines[i], x, y + i * 12, color);
+        for (int i = 0; i < lines.length; i++) drawScaledCenteredText(g, lines[i], x, y + i * 16, 1.25F, color);
     }
 
     private void send(String action, int value) {
@@ -437,6 +484,10 @@ public final class NavigationTerminalScreen extends Screen {
 
     private void send(String action, float x, float y) {
         ModNetworking.CHANNEL.sendToServer(new NavigationPackets.ServerboundNavigationAction(terminalPos, action, 0, x, y));
+    }
+
+    private void send(String action, int value, float x, float y) {
+        ModNetworking.CHANNEL.sendToServer(new NavigationPackets.ServerboundNavigationAction(terminalPos, action, value, x, y));
     }
 
     @Override
@@ -466,6 +517,38 @@ public final class NavigationTerminalScreen extends Screen {
             int index = Mth.clamp((int) ((y - 350) / 32.0D), 0, 2);
             send("select", index);
             return true;
+        }
+        if (inside(x, y, 430, 112, 532, 139)) {
+            send("template", 0);
+            return true;
+        }
+        for (int i = 0; i < 6; i++) {
+            int cx = 200 + i * 45;
+            if (inside(x, y, cx - 20, 340, cx + 20, 380)) {
+                selectedStatusAction = i;
+                return true;
+            }
+        }
+        if (inside(x, y, 66, 147, 530, 328)) {
+            byte[] cells = state.getByteArray("HullGrid");
+            int columns = Math.max(1, state.getInt("HullColumns"));
+            int rows = Math.max(1, state.getInt("HullRows"));
+            if (cells.length >= columns * rows) {
+                int availableW = 530 - 66 - 34;
+                int availableH = 328 - 147 - 42;
+                float cellSize = Math.max(2.0F, Math.min(availableW / (float)columns, availableH / (float)rows));
+                int gridW = Math.round(cellSize * columns);
+                int gridH = Math.round(cellSize * rows);
+                int originX = 66 + (530 - 66 - gridW) / 2;
+                int originY = 147 + 20 + Math.max(0, (availableH - gridH) / 2);
+                int column = (int)((x - originX) / cellSize);
+                int row = (int)((y - originY) / cellSize);
+                if (column >= 0 && column < columns && row >= 0 && row < rows
+                        && row * columns + column < cells.length && cells[row * columns + column] != 0) {
+                    send("section_action", selectedStatusAction, column, row);
+                    return true;
+                }
+            }
         }
         if (inside(x, y, 188, 478, 411, 543)) {
             send("shutdown_reactor", 0);

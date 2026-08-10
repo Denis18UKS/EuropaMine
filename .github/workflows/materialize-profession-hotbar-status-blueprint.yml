@@ -1,0 +1,45 @@
+name: Материализация профессий, хотбара и 2D-подлодки
+
+on:
+  push:
+    branches:
+      - codex/profession-hotbar-status-blueprint
+  workflow_dispatch:
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Получить ветку
+        uses: actions/checkout@v4
+        with:
+          ref: codex/profession-hotbar-status-blueprint
+          fetch-depth: 0
+
+      - name: Развернуть исходники
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .task2chunks/c00 ]; then
+            echo "Пакет уже развёрнут."
+            exit 0
+          fi
+
+          cat .task2chunks/c* | tr -d '\r\n' | base64 --decode > /tmp/task2-overlay.zip
+          echo "573d042b8de3417229f61d92512238ca0f8ff35212d8c12f6a65d52d4d0793fa  /tmp/task2-overlay.zip" | sha256sum -c -
+          unzip -oq /tmp/task2-overlay.zip -d .
+          rm -rf .task2 .task2chunks
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- .task2 .task2chunks build.gradle src/main
+
+          if git diff --cached --quiet; then
+            echo "Изменений нет."
+            exit 0
+          fi
+
+          git commit -m 'Добавить профессии, реальные слоты, монитор и 2D-конструктор'
+          git push origin HEAD:codex/profession-hotbar-status-blueprint

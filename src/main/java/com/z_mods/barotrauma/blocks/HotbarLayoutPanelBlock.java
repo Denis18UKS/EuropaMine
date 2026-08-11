@@ -39,10 +39,12 @@ public final class HotbarLayoutPanelBlock extends HorizontalDirectionalBlock imp
     public static final IntegerProperty ROW = IntegerProperty.create("row", 0, HEIGHT - 1);
     private static final ThreadLocal<Boolean> ASSEMBLING = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> DISMANTLING = ThreadLocal.withInitial(() -> false);
-    private static final VoxelShape NORTH = Shapes.box(0, 0, 0.875, 1, 1, 1);
-    private static final VoxelShape SOUTH = Shapes.box(0, 0, 0, 1, 1, 0.125);
-    private static final VoxelShape WEST = Shapes.box(0.875, 0, 0, 1, 1, 1);
-    private static final VoxelShape EAST = Shapes.box(0, 0, 0, 0.125, 1, 1);
+    // Collision surface is on the SAME side as the renderer. The previous values were reversed,
+    // so angled clicks hit a plane almost one whole block behind the visible button and selected neighbours.
+    private static final VoxelShape NORTH = Shapes.box(0, 0, 0, 1, 1, 0.125);
+    private static final VoxelShape SOUTH = Shapes.box(0, 0, 0.875, 1, 1, 1);
+    private static final VoxelShape WEST = Shapes.box(0, 0, 0, 0.125, 1, 1);
+    private static final VoxelShape EAST = Shapes.box(0.875, 0, 0, 1, 1, 1);
     private static final double PIXEL_SCALE = 0.013D;
 
     public HotbarLayoutPanelBlock() {
@@ -124,17 +126,19 @@ public final class HotbarLayoutPanelBlock extends HorizontalDirectionalBlock imp
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
                                  InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
-            BlockPos origin = origin(pos, state);
             Direction facing = state.getValue(FACING);
             Direction right = facing.getCounterClockWise();
             Vec3 location = hit.getLocation();
+            Vec3 blockCenter = Vec3.atCenterOf(pos);
 
-            double centerX = origin.getX() + 0.5D + right.getStepX() * 3.0D + facing.getStepX() * 0.506D;
-            double centerY = origin.getY() + 2.0D;
-            double centerZ = origin.getZ() + 0.5D + right.getStepZ() * 3.0D + facing.getStepZ() * 0.506D;
-            double along = (location.x - centerX) * right.getStepX() + (location.z - centerZ) * right.getStepZ();
-            float canvasX = (float)(along / PIXEL_SCALE + 240.0D);
-            float canvasY = (float)(-(location.y - centerY) / PIXEL_SCALE + 135.0D);
+            // Invert exactly the renderer transform, but derive the panel coordinate from the clicked
+            // multiblock part itself. This avoids accumulated world-space/face-depth error on angled clicks.
+            double localAlong = (location.x - blockCenter.x) * right.getStepX()
+                    + (location.z - blockCenter.z) * right.getStepZ();
+            double panelU = state.getValue(COLUMN) + 0.5D + localAlong;
+            double panelV = state.getValue(ROW) + 0.5D + (location.y - blockCenter.y);
+            float canvasX = (float)(((panelU - 3.5D) / PIXEL_SCALE) + 240.0D);
+            float canvasY = (float)(-((panelV - 2.0D) / PIXEL_SCALE) + 135.0D);
             if (canvasX >= 0 && canvasX <= 480 && canvasY >= 0 && canvasY <= 270) {
                 HotbarPackets.panelClick(serverPlayer, canvasX, canvasY);
             }

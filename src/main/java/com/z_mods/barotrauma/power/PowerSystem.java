@@ -9,7 +9,6 @@ import com.z_mods.barotrauma.item.WireToolItem;
 import com.z_mods.barotrauma.navigation.NavigationSystem;
 import com.z_mods.barotrauma.navigation.NavigationWorldData;
 import com.z_mods.barotrauma.network.PanelNetworkSync;
-import com.z_mods.barotrauma.network.HotbarPackets;
 import com.z_mods.barotrauma.network.UtilityPackets;
 import com.z_mods.barotrauma.menu.VentMenu;
 import net.minecraftforge.network.NetworkHooks;
@@ -43,8 +42,7 @@ public final class PowerSystem {
             new GuiEntry("settings_panel", "Панель настроек игры"),
             new GuiEntry("vent", "Интерактивная вентиляция"),
             new GuiEntry(NavigationWorldData.NAVIGATION_GUI, "Навигационный терминал"),
-            new GuiEntry("structure_config", "Настройка конструкции"),
-            new GuiEntry("hotbar_layout_panel", "Настройка слотов хотбара")
+            new GuiEntry("structure_config", "Настройка конструкции")
     );
 
     private PowerSystem() {
@@ -104,7 +102,8 @@ public final class PowerSystem {
                 }
             }, buffer -> buffer.writeBlockPos(pos));
             case "structure_config" -> UtilityPackets.openStructureConfig(player);
-            case "hotbar_layout_panel" -> HotbarPackets.open(player);
+            case "hotbar_layout_panel" -> player.displayClientMessage(Component.literal(
+                    "Настройка хотбара теперь выполняется на отдельной настенной панели barotrauma:hotbar_layout_panel."), true);
             default -> player.displayClientMessage(Component.literal("Неизвестный GUI: " + guiId), true);
         }
     }

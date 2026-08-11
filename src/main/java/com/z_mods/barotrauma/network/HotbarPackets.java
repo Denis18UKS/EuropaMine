@@ -1,10 +1,11 @@
 package com.z_mods.barotrauma.network;
 
-import com.z_mods.barotrauma.client.HotbarLayoutScreen;
+import com.z_mods.barotrauma.client.HotbarLayoutSettings;
 import com.z_mods.barotrauma.hotbar.ExtraHotbar;
 import com.z_mods.barotrauma.hotbar.ExtraHotbarStorage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
@@ -23,6 +24,9 @@ public final class HotbarPackets {
         channel.messageBuilder(ClientboundOpenHotbarLayout.class, ids.getAsInt())
                 .encoder(ClientboundOpenHotbarLayout::encode).decoder(ClientboundOpenHotbarLayout::decode)
                 .consumerMainThread(ClientboundOpenHotbarLayout::handle).add();
+        channel.messageBuilder(ClientboundHotbarPanelClick.class, ids.getAsInt())
+                .encoder(ClientboundHotbarPanelClick::encode).decoder(ClientboundHotbarPanelClick::decode)
+                .consumerMainThread(ClientboundHotbarPanelClick::handle).add();
         channel.messageBuilder(ClientboundHotbarSync.class, ids.getAsInt())
                 .encoder(ClientboundHotbarSync::encode).decoder(ClientboundHotbarSync::decode)
                 .consumerMainThread(ClientboundHotbarSync::handle).add();
@@ -34,9 +38,15 @@ public final class HotbarPackets {
                 .consumerMainThread(ServerboundSelectExtra::handle).add();
     }
 
+    /** Legacy bound-GUI hook. It no longer opens a Screen; configuration lives on the physical wall panel. */
     public static void open(ServerPlayer player) {
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ClientboundOpenHotbarLayout());
         sync(player);
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ClientboundOpenHotbarLayout());
+    }
+
+    public static void panelClick(ServerPlayer player, float canvasX, float canvasY) {
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new ClientboundHotbarPanelClick(canvasX, canvasY));
     }
 
     public static void sync(ServerPlayer player) {
@@ -50,8 +60,27 @@ public final class HotbarPackets {
         static void encode(ClientboundOpenHotbarLayout packet, FriendlyByteBuf buf) {}
         static ClientboundOpenHotbarLayout decode(FriendlyByteBuf buf) { return new ClientboundOpenHotbarLayout(); }
         static void handle(ClientboundOpenHotbarLayout packet, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.displayClientMessage(Component.literal(
+                            "Настройка слотов выполняется прямо на настенной панели. Отдельный GUI больше не открывается."), true);
+                }
+            }));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public record ClientboundHotbarPanelClick(float canvasX, float canvasY) {
+        static void encode(ClientboundHotbarPanelClick packet, FriendlyByteBuf buf) {
+            buf.writeFloat(packet.canvasX);
+            buf.writeFloat(packet.canvasY);
+        }
+        static ClientboundHotbarPanelClick decode(FriendlyByteBuf buf) {
+            return new ClientboundHotbarPanelClick(buf.readFloat(), buf.readFloat());
+        }
+        static void handle(ClientboundHotbarPanelClick packet, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> Minecraft.getInstance().setScreen(new HotbarLayoutScreen())));
+                    () -> () -> HotbarLayoutSettings.handlePanelClick(packet.canvasX, packet.canvasY)));
             ctx.get().setPacketHandled(true);
         }
     }
@@ -81,9 +110,7 @@ public final class HotbarPackets {
                 if (Minecraft.getInstance().player == null) return;
                 ExtraHotbarStorage storage = ExtraHotbar.storage(Minecraft.getInstance().player);
                 if (storage == null) return;
-                for (int i = 0; i < ExtraHotbar.MAX_EXTRA; i++) {
-                    storage.setStackInSlot(i, packet.stacks[i].copy());
-                }
+                for (int i = 0; i < ExtraHotbar.MAX_EXTRA; i++) storage.setStackInSlot(i, packet.stacks[i].copy());
             }));
             ctx.get().setPacketHandled(true);
         }

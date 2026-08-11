@@ -55,5 +55,6 @@
   "gui.barotrauma.navigation_terminal": "Navigation Terminal",
   "item.barotrauma.active_hand_sonar": "Active Handheld Sonar",
   "item.barotrauma.submarine_drawing_tool": "2D Submarine Builder",
-  "key.barotrauma.hotbar_10": "Select hotbar slot 10"
+  "key.barotrauma.hotbar_10": "Select hotbar slot 10",
+  "item.barotrauma.slot_binding_configurator": "Slot Binding Configurator"
 }

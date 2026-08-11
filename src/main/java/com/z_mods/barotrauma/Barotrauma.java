@@ -10,6 +10,7 @@ import com.z_mods.barotrauma.blocks.StructureConfigBlockRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import com.z_mods.barotrauma.client.SettingsPanelRenderer;
+import com.z_mods.barotrauma.client.HotbarLayoutPanelRenderer;
 import com.z_mods.barotrauma.client.VentScreen;
 import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
@@ -54,6 +55,7 @@ public class Barotrauma {
             event.accept(ModBlocks.VENT_DECO_INT.get());
             event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
             event.accept(ModBlocks.SETTINGS_PANEL.get());
+            event.accept(ModBlocks.HOTBAR_LAYOUT_PANEL.get());
             event.accept(ModBlocks.BEDS.get());
             event.accept(ModBlocks.JUNCTION_BOX.get());
             event.accept(ModBlocks.SUBMARINE_BUTTON_BLOCK.get());
@@ -113,6 +115,11 @@ public class Barotrauma {
                 BlockEntityRenderers.register(
                     ModBlockEntities.SETTINGS_PANEL.get(),
                     SettingsPanelRenderer::new
+                );
+
+                BlockEntityRenderers.register(
+                    ModBlockEntities.HOTBAR_LAYOUT_PANEL.get(),
+                    HotbarLayoutPanelRenderer::new
                 );
             });
         }

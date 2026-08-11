@@ -182,10 +182,22 @@ public final class ExtraHotbarClientEvents {
             int left = (event.getScreen().width - 176) / 2;
             int top = (event.getScreen().height - 166) / 2;
             int count = ExtraHotbar.getClientAppliedCount();
+            int panelX = left + 176;
+            int panelY = top + 4;
+            int panelH = Math.max(26, count * 18 + 10);
+            g.fill(panelX, panelY, panelX + 58, panelY + panelH, 0xD0101514);
+            g.renderOutline(panelX, panelY, 58, panelH, 0xFF65746F);
             for (int i = 0; i < count; i++) {
-                int x = left + 6 + i * 18;
-                int y = top + 164;
-                g.blit(WIDGETS, x, y, 20, 0, 22, 22);
+                int x = left + 180;
+                int y = top + 8 + i * 18;
+                // Vanilla slot texture; redraw the stack above it because this hook runs after the vanilla screen.
+                g.blit(WIDGETS, x - 2, y - 2, 20, 0, 22, 22);
+                ItemStack stack = ExtraHotbar.getStack(mc.player, i);
+                if (!stack.isEmpty()) {
+                    g.renderItem(stack, x, y);
+                    g.renderItemDecorations(mc.font, stack, x, y);
+                }
+                g.drawString(mc.font, Integer.toString(10 + i), x + 21, y + 5, 0xFFE6E6E6, true);
             }
         }
 

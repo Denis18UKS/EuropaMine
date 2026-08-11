@@ -10,7 +10,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
@@ -23,6 +25,7 @@ import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 
 public final class ExtraHotbarClientEvents {
+    private static final ResourceLocation WIDGETS = new ResourceLocation("minecraft", "textures/gui/widgets.png");
     public static final KeyMapping SLOT_TEN = new KeyMapping("key.barotrauma.hotbar_10",
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_0, "key.categories.barotrauma");
 
@@ -41,7 +44,6 @@ public final class ExtraHotbarClientEvents {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return;
 
-            // Repair a client player copied from the unsafe build where selected could be 9..17.
             if (mc.player.getInventory().selected >= ExtraHotbar.VANILLA_HOTBAR) {
                 int extra = mc.player.getInventory().selected - ExtraHotbar.VANILLA_HOTBAR;
                 mc.player.getInventory().selected = 0;
@@ -102,19 +104,72 @@ public final class ExtraHotbarClientEvents {
         }
 
         @SubscribeEvent
+        public static void renderHotbarPre(RenderGuiOverlayEvent.Pre event) {
+            if (!event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) return;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null || mc.options.hideGui || ExtraHotbar.getClientSelectedExtra() < 0) return;
+
+            event.setCanceled(true);
+            GuiGraphics g = event.getGuiGraphics();
+            drawVanillaBaseWithoutSelection(g, mc, event.getWindow().getGuiScaledWidth(),
+                    event.getWindow().getGuiScaledHeight());
+            drawExtraSlots(g, mc, event.getWindow().getGuiScaledWidth(), event.getWindow().getGuiScaledHeight());
+
+            PlayerProfileOverlay.drawLayoutSlots(g, mc);
+            PlayerProfileOverlay.drawProfilePanel(g, mc, event.getWindow().getGuiScaledWidth(),
+                    event.getWindow().getGuiScaledHeight(), false);
+        }
+
+        @SubscribeEvent
         public static void renderHotbar(RenderGuiOverlayEvent.Post event) {
             if (!event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) return;
             Minecraft mc = Minecraft.getInstance();
-            if (mc.player == null || mc.options.hideGui) return;
-            GuiGraphics g = event.getGuiGraphics();
-            int count = ExtraHotbar.getClientAppliedCount();
-            int baseX = event.getWindow().getGuiScaledWidth() / 2 - 91 + 9 * 20;
-            int baseY = event.getWindow().getGuiScaledHeight() - 22;
+            if (mc.player == null || mc.options.hideGui || ExtraHotbar.getClientSelectedExtra() >= 0) return;
+            drawExtraSlots(event.getGuiGraphics(), mc, event.getWindow().getGuiScaledWidth(),
+                    event.getWindow().getGuiScaledHeight());
+        }
+
+        private static void drawVanillaBaseWithoutSelection(GuiGraphics g, Minecraft mc, int screenWidth, int screenHeight) {
+            int left = screenWidth / 2 - 91;
+            int y = screenHeight - 22;
+            g.blit(WIDGETS, left, y, 0, 0, 182, 22);
+            for (int i = 0; i < ExtraHotbar.VANILLA_HOTBAR; i++) {
+                ItemStack stack = mc.player.getInventory().items.get(i);
+                if (stack.isEmpty()) continue;
+                int itemX = left + 3 + i * 20;
+                int itemY = y + 3;
+                g.renderItem(stack, itemX, itemY);
+                g.renderItemDecorations(mc.font, stack, itemX, itemY);
+            }
+
+            ItemStack offhand = mc.player.getOffhandItem();
+            if (!offhand.isEmpty()) {
+                HumanoidArm offArm = mc.player.getMainArm().getOpposite();
+                int slotX;
+                if (offArm == HumanoidArm.LEFT) {
+                    slotX = left - 29;
+                    g.blit(WIDGETS, slotX, y - 1, 24, 22, 29, 24);
+                } else {
+                    slotX = left + 182;
+                    g.blit(WIDGETS, slotX, y - 1, 53, 22, 29, 24);
+                }
+                g.renderItem(offhand, slotX + 3, y + 3);
+                g.renderItemDecorations(mc.font, offhand, slotX + 3, y + 3);
+            }
+        }
+
+        private static void drawExtraSlots(GuiGraphics g, Minecraft mc, int screenWidth, int screenHeight) {
+            int vanillaLeft = screenWidth / 2 - 91;
+            int baseY = screenHeight - 22;
+            int count = HotbarLayoutSettings.displayedCount();
+            int extraBaseX = vanillaLeft + 9 * 20;
+            int appliedCount = ExtraHotbar.getClientAppliedCount();
             for (int i = 0; i < count; i++) {
-                int x = baseX + HotbarLayoutSettings.x(i);
+                int x = extraBaseX + HotbarLayoutSettings.x(i);
                 int y = baseY + HotbarLayoutSettings.y(i);
-                boolean selected = ExtraHotbar.getClientSelectedExtra() == i;
-                drawRealSlot(g, mc, i, x, y, selected);
+                boolean realSlot = i < appliedCount;
+                boolean selected = realSlot && ExtraHotbar.getClientSelectedExtra() == i;
+                drawVanillaSlot(g, mc, i, x, y, selected, realSlot);
             }
         }
 
@@ -128,23 +183,22 @@ public final class ExtraHotbarClientEvents {
             int top = (event.getScreen().height - 166) / 2;
             int count = ExtraHotbar.getClientAppliedCount();
             for (int i = 0; i < count; i++) {
-                int x = left + 7 + i * 18;
-                int y = top + 165;
-                g.renderOutline(x, y, 18, 18, 0xFF5B766E);
-                g.drawString(mc.font, i == 0 ? "0" : Integer.toString(10 + i), x + 5, y + 20, 0xFFB7C8C2, false);
+                int x = left + 6 + i * 18;
+                int y = top + 164;
+                g.blit(WIDGETS, x, y, 20, 0, 22, 22);
             }
         }
 
-        private static void drawRealSlot(GuiGraphics g, Minecraft mc, int extraIndex, int x, int y, boolean selected) {
-            g.fill(x, y, x + 20, y + 20, 0xD0111716);
-            g.renderOutline(x, y, 20, 20, selected ? 0xFFF3D680 : 0xFF50665F);
+        private static void drawVanillaSlot(GuiGraphics g, Minecraft mc, int extraIndex,
+                                            int x, int y, boolean selected, boolean renderItem) {
+            g.blit(WIDGETS, x, y, 20, 0, 22, 22);
+            if (selected) g.blit(WIDGETS, x - 1, y - 1, 0, 22, 24, 24);
+            if (!renderItem) return;
             ItemStack stack = ExtraHotbar.getStack(mc.player, extraIndex);
             if (!stack.isEmpty()) {
-                g.renderItem(stack, x + 2, y + 2);
-                g.renderItemDecorations(mc.font, stack, x + 2, y + 2);
+                g.renderItem(stack, x + 3, y + 3);
+                g.renderItemDecorations(mc.font, stack, x + 3, y + 3);
             }
-            if (selected) g.renderOutline(x - 2, y - 2, 24, 24, 0xFFFFFFFF);
-            if (extraIndex == 0) g.drawString(mc.font, "0", x + 12, y + 2, 0xFFA9B4B0, false);
         }
     }
 }

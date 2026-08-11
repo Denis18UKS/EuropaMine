@@ -55,5 +55,6 @@
   "gui.barotrauma.navigation_terminal": "Навигационный терминал",
   "item.barotrauma.active_hand_sonar": "Активный ручной сонар",
   "item.barotrauma.submarine_drawing_tool": "2D-конструктор подлодки",
-  "key.barotrauma.hotbar_10": "Выбрать 10-й слот хотбара"
+  "key.barotrauma.hotbar_10": "Выбрать 10-й слот хотбара",
+  "item.barotrauma.slot_binding_configurator": "Настройщик привязки слотов"
 }

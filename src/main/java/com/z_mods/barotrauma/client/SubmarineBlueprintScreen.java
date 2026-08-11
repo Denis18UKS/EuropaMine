@@ -19,7 +19,7 @@ import java.util.Arrays;
 public final class SubmarineBlueprintScreen extends Screen {
     public static final int GRID_W = 48;
     public static final int GRID_H = 24;
-    private static final int SAVE_MAGIC = 0x45554250; // EUBP
+    private static final int SAVE_MAGIC = 0x45554250;
     private static final int SAVE_VERSION = 1;
     private static final Path SAVE_PATH = Minecraft.getInstance().gameDirectory.toPath()
             .resolve("config").resolve("barotrauma_submarine_blueprint.bin");
@@ -39,8 +39,6 @@ public final class SubmarineBlueprintScreen extends Screen {
 
     @Override
     protected void init() {
-        // Reserve enough room for two independent rows of controls. Previously all buttons were
-        // forced into one row and overlapped as soon as the grid had to shrink to a 5px cell size.
         cellSize = Math.max(5, Math.min(12, Math.min((width - 40) / GRID_W, (height - 168) / GRID_H)));
         gridX = (width - GRID_W * cellSize) / 2;
         gridY = Math.max(44, (height - GRID_H * cellSize - 72) / 2);

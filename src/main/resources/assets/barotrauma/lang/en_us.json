@@ -9,6 +9,7 @@
   "block.barotrauma.submarine_lever": "Submarine Lever",
   "block.barotrauma.submarine_trapdoor": "Submarine Trapdoor",
   "block.barotrauma.settings_panel": "Server Settings Panel",
+  "block.barotrauma.hotbar_layout_panel": "Hotbar Slot Layout Panel",
   "item.barotrauma.nametag": "Access Nametag",
   "item.barotrauma.access_configurator": "Access Configurator",
   "item.barotrauma.slot_lock_tool": "Slot Lock Tool",

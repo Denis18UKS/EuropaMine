@@ -51,7 +51,7 @@ public final class SubmarineBlueprintScreen extends Screen {
 
         // First row is always centered as a group, so no control can collide with another one
         // regardless of GUI scale / window size.
-        int firstButtonW = 70;
+        int firstButtonW = Math.min(70, Math.max(54, (width - 34) / 4));
         int firstGap = 6;
         int firstTotal = firstButtonW * 4 + firstGap * 3;
         int firstX = (width - firstTotal) / 2;

@@ -21,8 +21,8 @@ public abstract class InventoryMenuExtraHotbarMixin extends AbstractContainerMen
     @Inject(method = "<init>", at = @At("TAIL"))
     private void barotrauma$addExtraSlots(Inventory inventory, boolean active, Player owner, CallbackInfo ci) {
         for (int i = 0; i < ExtraHotbar.MAX_EXTRA; i++) {
-            // A separate row directly below the vanilla hotbar in the inventory screen.
-            this.addSlot(new ExtraHotbarSlot(inventory, i, 8 + i * 18, 166));
+            // Vertical column to the right of the vanilla inventory, slots 10..18.
+            this.addSlot(new ExtraHotbarSlot(inventory, i, 180, 8 + i * 18));
         }
     }
 }

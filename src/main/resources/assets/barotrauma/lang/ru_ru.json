@@ -9,6 +9,7 @@
   "block.barotrauma.submarine_lever": "Рычаг подлодки",
   "block.barotrauma.submarine_trapdoor": "Люк подлодки",
   "block.barotrauma.settings_panel": "Панель настроек сервера",
+  "block.barotrauma.hotbar_layout_panel": "Панель настройки слотов хотбара",
   "item.barotrauma.nametag": "Бейдж доступа",
   "item.barotrauma.access_configurator": "Настройщик доступа",
   "item.barotrauma.slot_lock_tool": "Инструмент блокировки слотов",

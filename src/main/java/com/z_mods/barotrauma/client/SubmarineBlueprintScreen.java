@@ -49,8 +49,6 @@ public final class SubmarineBlueprintScreen extends Screen {
         int firstRowY = Math.min(height - 52, gridBottom + 8);
         int secondRowY = Math.min(height - 28, firstRowY + 24);
 
-        // First row is always centered as a group, so no control can collide with another one
-        // regardless of GUI scale / window size.
         int firstButtonW = Math.min(70, Math.max(54, (width - 34) / 4));
         int firstGap = 6;
         int firstTotal = firstButtonW * 4 + firstGap * 3;
@@ -74,8 +72,6 @@ public final class SubmarineBlueprintScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Закрыть"), b -> onClose())
                 .bounds(secondX + buildW + secondGap, secondRowY, closeW, 20).build());
 
-        // A saved project survives closing the editor and client restarts. Load it once when the
-        // editor is opened, but never overwrite current unsaved drawing on resize/init calls.
         if (!initialProjectLoaded) {
             initialProjectLoaded = true;
             if (Files.exists(SAVE_PATH)) loadProject(false);
@@ -101,7 +97,6 @@ public final class SubmarineBlueprintScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Widgets get the click first. Drawing starts only when no actual button consumed it.
         if (super.mouseClicked(mouseX, mouseY, button)) return true;
         if (button == 0 || button == 1) {
             int index = cellAt(mouseX, mouseY);
@@ -211,9 +206,6 @@ public final class SubmarineBlueprintScreen extends Screen {
             notice = "Нарисуйте хотя бы один блок.";
             return;
         }
-
-        // Save before sending: even if the server rejects placement due to occupied terrain,
-        // the player's blueprint remains available for another attempt.
         saveProject();
         ModNetworking.CHANNEL.sendToServer(new BlueprintPackets.ServerboundBuildBlueprint(GRID_W, GRID_H, data));
         notice = "Проект сохранён и отправлен на строительство: " + count + " блоков.";

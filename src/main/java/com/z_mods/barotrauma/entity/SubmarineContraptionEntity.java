@@ -232,6 +232,13 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
     }
 
     @Override
+    public AABB getBoundingBoxForCulling() {
+        // The carrier EntityType is intentionally small, but rendering must be culled against the
+        // complete rotated hull so long submarines do not vanish when the pivot leaves the frustum.
+        return transformedBounds(getX(), getY(), getZ(), getYRot(), getXRot()).inflate(1.0D);
+    }
+
+    @Override
     public boolean isPickable() {
         return false;
     }

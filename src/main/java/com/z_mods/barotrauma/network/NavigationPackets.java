@@ -97,21 +97,23 @@ public final class NavigationPackets {
         }
     }
 
-    public static void sendVesselMotion(ServerPlayer player, Vec3 delta, float yawDelta) {
+    public static void sendVesselMotion(ServerPlayer player, Vec3 delta, float viewYaw, float viewPitch) {
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ClientboundVesselMotion(delta.x, delta.y, delta.z, yawDelta));
+                new ClientboundVesselMotion(delta.x, delta.y, delta.z, viewYaw, viewPitch));
     }
 
-    public record ClientboundVesselMotion(double x, double y, double z, float yawDelta) {
+    public record ClientboundVesselMotion(double x, double y, double z, float viewYaw, float viewPitch) {
         static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {
             buffer.writeDouble(packet.x);
             buffer.writeDouble(packet.y);
             buffer.writeDouble(packet.z);
-            buffer.writeFloat(packet.yawDelta);
+            buffer.writeFloat(packet.viewYaw);
+            buffer.writeFloat(packet.viewPitch);
         }
 
         static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {
-            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(), buffer.readFloat());
+            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),
+                    buffer.readFloat(), buffer.readFloat());
         }
 
         static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {
@@ -121,8 +123,10 @@ public final class NavigationPackets {
                 minecraft.player.setPos(minecraft.player.getX() + packet.x,
                         minecraft.player.getY() + packet.y,
                         minecraft.player.getZ() + packet.z);
-                minecraft.player.setYRot(minecraft.player.getYRot() + packet.yawDelta);
-                minecraft.player.yHeadRot += packet.yawDelta;
+                minecraft.player.setYRot(packet.viewYaw);
+                minecraft.player.setXRot(packet.viewPitch);
+                minecraft.player.yHeadRot = packet.viewYaw;
+                minecraft.player.yBodyRot = packet.viewYaw;
                 minecraft.player.fallDistance = 0.0F;
             }));
             context.get().setPacketHandled(true);

@@ -445,8 +445,6 @@ public final class NavigationWorldData extends SavedData {
                 Math.min(oldBounds.minZ, newBounds.minZ), Math.max(oldBounds.maxX, newBounds.maxX),
                 Math.max(oldBounds.maxY, newBounds.maxY), Math.max(oldBounds.maxZ, newBounds.maxZ)).inflate(1.25D);
         AABB localBounds = contraption.localBounds().inflate(0.9D, 1.4D, 0.9D);
-        float yawDelta = angleDifference(oldYaw, newYaw);
-
         List<Entity> carried = level.getEntities((Entity)null, search, entity -> entity.isAlive()
                 && entity != contraption
                 && !(entity instanceof net.minecraft.world.entity.decoration.HangingEntity)
@@ -466,14 +464,27 @@ public final class NavigationWorldData extends SavedData {
                 }
             }
 
+            // Rotate the entity view through the same old -> local -> new hull transform.
+            // This keeps the camera stable relative to the submarine during combined yaw + pitch.
+            Vec3 oldLook = entity.getLookAngle();
+            Vec3 localLook = SubmarineContraptionEntity.inverseRotate(oldLook, oldYaw, oldPitch);
+            Vec3 newLook = SubmarineContraptionEntity.rotateLocal(localLook, newYaw, newPitch).normalize();
+            float viewYaw = (float)Math.toDegrees(Math.atan2(-newLook.x, newLook.z));
+            float viewPitch = (float)Math.toDegrees(Math.atan2(-newLook.y,
+                    Math.sqrt(newLook.x * newLook.x + newLook.z * newLook.z)));
+
             Vec3 target = contraption.localToWorld(local, newX, newY, newZ, newYaw, newPitch);
             Vec3 delta = target.subtract(entity.position());
             entity.setPos(target.x, target.y, target.z);
+            entity.setYRot(viewYaw);
+            entity.setXRot(viewPitch);
             entity.fallDistance = 0.0F;
+            if (entity instanceof LivingEntity living) {
+                living.setYHeadRot(viewYaw);
+                living.yBodyRot = viewYaw;
+            }
             if (entity instanceof ServerPlayer player) {
-                player.setYRot(player.getYRot() + yawDelta);
-                player.setYHeadRot(player.getYHeadRot() + yawDelta);
-                NavigationPackets.sendVesselMotion(player, delta, yawDelta);
+                NavigationPackets.sendVesselMotion(player, delta, viewYaw, viewPitch);
             }
         }
     }

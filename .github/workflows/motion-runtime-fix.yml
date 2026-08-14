@@ -1,0 +1,61 @@
+name: Runtime-хотфикс 3D-движения
+
+on:
+  push:
+    branches:
+      - codex/profession-hotbar-status-blueprint
+    paths:
+      - '.motion-runtime/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Синхронизировать 3D-поворот игрока и culling корпуса
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('src/main/java/com/z_mods/barotrauma/navigation/NavigationWorldData.java')
+          s=p.read_text()
+          s=s.replace('''        float yawDelta = angleDifference(oldYaw, newYaw);\n\n        List<Entity> carried = level.getEntities((Entity)null, search, entity -> entity.isAlive()\n''','''        List<Entity> carried = level.getEntities((Entity)null, search, entity -> entity.isAlive()\n''',1)
+          old='''            Vec3 target = contraption.localToWorld(local, newX, newY, newZ, newYaw, newPitch);\n            Vec3 delta = target.subtract(entity.position());\n            entity.setPos(target.x, target.y, target.z);\n            entity.fallDistance = 0.0F;\n            if (entity instanceof ServerPlayer player) {\n                player.setYRot(player.getYRot() + yawDelta);\n                player.setYHeadRot(player.getYHeadRot() + yawDelta);\n                NavigationPackets.sendVesselMotion(player, delta, yawDelta);\n            }\n'''
+          new='''            // Rotate the entity view through the same old -> local -> new hull transform.\n            // This keeps the camera stable relative to the submarine during combined yaw + pitch.\n            Vec3 oldLook = entity.getLookAngle();\n            Vec3 localLook = SubmarineContraptionEntity.inverseRotate(oldLook, oldYaw, oldPitch);\n            Vec3 newLook = SubmarineContraptionEntity.rotateLocal(localLook, newYaw, newPitch).normalize();\n            float viewYaw = (float)Math.toDegrees(Math.atan2(-newLook.x, newLook.z));\n            float viewPitch = (float)Math.toDegrees(Math.atan2(-newLook.y,\n                    Math.sqrt(newLook.x * newLook.x + newLook.z * newLook.z)));\n\n            Vec3 target = contraption.localToWorld(local, newX, newY, newZ, newYaw, newPitch);\n            Vec3 delta = target.subtract(entity.position());\n            entity.setPos(target.x, target.y, target.z);\n            entity.setYRot(viewYaw);\n            entity.setXRot(viewPitch);\n            entity.fallDistance = 0.0F;\n            if (entity instanceof LivingEntity living) {\n                living.setYHeadRot(viewYaw);\n                living.yBodyRot = viewYaw;\n            }\n            if (entity instanceof ServerPlayer player) {\n                NavigationPackets.sendVesselMotion(player, delta, viewYaw, viewPitch);\n            }\n'''
+          if old not in s: raise SystemExit('NavigationWorldData target not found')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('src/main/java/com/z_mods/barotrauma/network/NavigationPackets.java')
+          s=p.read_text()
+          old='''    public static void sendVesselMotion(ServerPlayer player, Vec3 delta, float yawDelta) {\n        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),\n                new ClientboundVesselMotion(delta.x, delta.y, delta.z, yawDelta));\n    }\n\n    public record ClientboundVesselMotion(double x, double y, double z, float yawDelta) {\n        static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {\n            buffer.writeDouble(packet.x);\n            buffer.writeDouble(packet.y);\n            buffer.writeDouble(packet.z);\n            buffer.writeFloat(packet.yawDelta);\n        }\n\n        static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {\n            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(), buffer.readFloat());\n        }\n\n        static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {\n            context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {\n                Minecraft minecraft = Minecraft.getInstance();\n                if (minecraft.player == null) return;\n                minecraft.player.setPos(minecraft.player.getX() + packet.x,\n                        minecraft.player.getY() + packet.y,\n                        minecraft.player.getZ() + packet.z);\n                minecraft.player.setYRot(minecraft.player.getYRot() + packet.yawDelta);\n                minecraft.player.yHeadRot += packet.yawDelta;\n                minecraft.player.fallDistance = 0.0F;\n            }));\n            context.get().setPacketHandled(true);\n        }\n    }\n'''
+          new='''    public static void sendVesselMotion(ServerPlayer player, Vec3 delta, float viewYaw, float viewPitch) {\n        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),\n                new ClientboundVesselMotion(delta.x, delta.y, delta.z, viewYaw, viewPitch));\n    }\n\n    public record ClientboundVesselMotion(double x, double y, double z, float viewYaw, float viewPitch) {\n        static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {\n            buffer.writeDouble(packet.x);\n            buffer.writeDouble(packet.y);\n            buffer.writeDouble(packet.z);\n            buffer.writeFloat(packet.viewYaw);\n            buffer.writeFloat(packet.viewPitch);\n        }\n\n        static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {\n            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),\n                    buffer.readFloat(), buffer.readFloat());\n        }\n\n        static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {\n            context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {\n                Minecraft minecraft = Minecraft.getInstance();\n                if (minecraft.player == null) return;\n                minecraft.player.setPos(minecraft.player.getX() + packet.x,\n                        minecraft.player.getY() + packet.y,\n                        minecraft.player.getZ() + packet.z);\n                minecraft.player.setYRot(packet.viewYaw);\n                minecraft.player.setXRot(packet.viewPitch);\n                minecraft.player.yHeadRot = packet.viewYaw;\n                minecraft.player.yBodyRot = packet.viewYaw;\n                minecraft.player.fallDistance = 0.0F;\n            }));\n            context.get().setPacketHandled(true);\n        }\n    }\n'''
+          if old not in s: raise SystemExit('NavigationPackets target not found')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('src/main/java/com/z_mods/barotrauma/entity/SubmarineContraptionEntity.java')
+          s=p.read_text()
+          old='''    @Override\n    public boolean isPickable() {\n        return false;\n    }\n'''
+          new='''    @Override\n    public AABB getBoundingBoxForCulling() {\n        // The carrier EntityType is intentionally small, but rendering must be culled against the\n        // complete rotated hull so long submarines do not vanish when the pivot leaves the frustum.\n        return transformedBounds(getX(), getY(), getZ(), getYRot(), getXRot()).inflate(1.0D);\n    }\n\n    @Override\n    public boolean isPickable() {\n        return false;\n    }\n'''
+          if old not in s: raise SystemExit('SubmarineContraptionEntity target not found')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('src/main/java/com/z_mods/barotrauma/network/ModNetworking.java')
+          s=p.read_text()
+          if 'PROTOCOL_VERSION = "13"' not in s: raise SystemExit('Protocol target not found')
+          p.write_text(s.replace('PROTOCOL_VERSION = "13"','PROTOCOL_VERSION = "14"',1))
+          PY
+          rm -rf .motion-runtime
+      - name: Зафиксировать хотфикс
+        shell: bash
+        run: |
+          git config user.name 'OpenAI Codex'
+          git config user.email 'codex@openai.com'
+          git add -A
+          git commit -m 'Синхронизировать игрока с yaw и pitch подлодки'
+          git push origin HEAD:codex/profession-hotbar-status-blueprint

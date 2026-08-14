@@ -1,6 +1,7 @@
 package com.z_mods.barotrauma.navigation;
 
 import com.z_mods.barotrauma.init.ModItems;
+import com.z_mods.barotrauma.entity.SubmarineContraptionEntity;
 import com.z_mods.barotrauma.network.NavigationPackets;
 import com.z_mods.barotrauma.power.PowerWorldData;
 import net.minecraft.core.BlockPos;
@@ -48,11 +49,14 @@ public final class NavigationWorldData extends SavedData {
     private static final int STATUS_ROWS = 24;
     private static final int TEMPLATE_COLUMNS = 48;
     private static final int TEMPLATE_ROWS = 18;
-    private static final double MAX_FORWARD_SPEED = 0.16D;
-    private static final double MAX_LATERAL_SPEED = 0.13D;
-    private static final double MAX_VERTICAL_SPEED = 0.11D;
-    private static final double VELOCITY_RESPONSE = 0.075D;
-    private static final int AUTOPILOT_LOOKAHEAD = 4;
+    private static final double MAX_FORWARD_SPEED = 0.18D;
+    private static final double SPEED_ACCELERATION = 0.0065D;
+    private static final double SPEED_BRAKE = 0.010D;
+    private static final float MAX_PITCH = 70.0F;
+    private static final float BASE_YAW_RATE = 3.2F;
+    private static final float BASE_PITCH_RATE = 2.1F;
+    private static final double MANUAL_DEADZONE = 0.035D;
+    private static final int AUTOPILOT_LOOKAHEAD = 7;
     private static final TagKey<EntityType<?>> SONAR_HOSTILE = TagKey.create(Registries.ENTITY_TYPE,
             new ResourceLocation("barotrauma", "sonar_hostile"));
 
@@ -157,167 +161,354 @@ public final class NavigationWorldData extends SavedData {
             VesselState vessel = vessels.get(terminal.vesselId);
             if (vessel == null || !processed.add(vessel.id)) continue;
 
-            boolean powered = NavigationSystem.hasPower(level, terminalPos);
-            Vec3 input = desiredInput(level, terminal, vessel);
-            double targetForward = powered ? input.x * MAX_FORWARD_SPEED : 0.0D;
-            double targetVertical = powered ? input.y * MAX_VERTICAL_SPEED : 0.0D;
-            double targetLateral = powered ? input.z * MAX_LATERAL_SPEED : 0.0D;
+            SubmarineContraptionEntity contraption = getContraption(level, vessel);
+            boolean powered = contraption != null ? vessel.detachedPower : NavigationSystem.hasPower(level, terminalPos);
+            MotionCommand command = desiredCommand(level, terminal, vessel, contraption);
+            double targetSpeed = powered ? command.speed : 0.0D;
 
-            vessel.forwardVelocity = approach(vessel.forwardVelocity, targetForward, VELOCITY_RESPONSE);
-            vessel.verticalVelocity = approach(vessel.verticalVelocity, targetVertical, VELOCITY_RESPONSE);
-            vessel.lateralVelocity = approach(vessel.lateralVelocity, targetLateral, VELOCITY_RESPONSE);
-            if (!powered) {
-                vessel.forwardVelocity *= 0.82D;
-                vessel.verticalVelocity *= 0.82D;
-                vessel.lateralVelocity *= 0.82D;
-            }
-
-            Direction facing = facingAt(level, terminalPos);
-            Direction right = facing.getClockWise();
-            Vec3 continuousMotion = new Vec3(
-                    facing.getStepX() * vessel.forwardVelocity + right.getStepX() * vessel.lateralVelocity,
-                    vessel.verticalVelocity,
-                    facing.getStepZ() * vessel.forwardVelocity + right.getStepZ() * vessel.lateralVelocity);
-
-            double nextForwardAccumulator = vessel.forwardAccumulator + vessel.forwardVelocity;
-            double nextVerticalAccumulator = vessel.verticalAccumulator + vessel.verticalVelocity;
-            double nextLateralAccumulator = vessel.lateralAccumulator + vessel.lateralVelocity;
-            int forwardStep = wholeStep(nextForwardAccumulator);
-            int verticalStep = wholeStep(nextVerticalAccumulator);
-            int lateralStep = wholeStep(nextLateralAccumulator);
-            int dx = facing.getStepX() * forwardStep + right.getStepX() * lateralStep;
-            int dy = verticalStep;
-            int dz = facing.getStepZ() * forwardStep + right.getStepZ() * lateralStep;
-
-            int probeForward = forwardStep != 0 ? forwardStep : sign(vessel.forwardVelocity);
-            int probeVertical = verticalStep != 0 ? verticalStep : sign(vessel.verticalVelocity);
-            int probeLateral = lateralStep != 0 ? lateralStep : sign(vessel.lateralVelocity);
-            int probeX = facing.getStepX() * probeForward + right.getStepX() * probeLateral;
-            int probeY = probeVertical;
-            int probeZ = facing.getStepZ() * probeForward + right.getStepZ() * probeLateral;
-
-            if ((probeX != 0 || probeY != 0 || probeZ != 0)
-                    && !isStepClear(level, vessel, 0, 0, 0, probeX, probeY, probeZ)) {
-                stopVessel(vessel);
-                continue;
-            }
-
-            vessel.forwardAccumulator = nextForwardAccumulator;
-            vessel.verticalAccumulator = nextVerticalAccumulator;
-            vessel.lateralAccumulator = nextLateralAccumulator;
-
-            boolean translated = true;
-            if (dx != 0 || dy != 0 || dz != 0) {
-                translated = translateVessel(level, vessel, dx, dy, dz);
-                if (translated) {
-                    vessel.forwardAccumulator -= forwardStep;
-                    vessel.verticalAccumulator -= verticalStep;
-                    vessel.lateralAccumulator -= lateralStep;
-                    vessel.lastMoveTick = ticks;
-                    translateTerminalsAndAliases(vessel, dx, dy, dz);
-                    changed = true;
+            // Do not detach a stationary vessel merely because its terminal is open. Once motion or
+            // a real turn is requested, capture the complete structure exactly once.
+            if (contraption == null && powered
+                    && (targetSpeed > MANUAL_DEADZONE
+                    || Math.abs(angleDifference(vessel.yaw, command.yaw)) > 0.25F
+                    || Math.abs(vessel.pitch - command.pitch) > 0.25F)) {
+                contraption = activateContraption(level, vessel, terminalPos);
+                if (contraption == null) {
+                    vessel.speed = 0.0D;
+                    continue;
                 }
+                changed = true;
             }
 
-            if (!translated) {
-                stopVessel(vessel);
+            if (contraption == null) {
+                vessel.speed = approachLinear(vessel.speed, 0.0D, SPEED_BRAKE);
                 continue;
             }
 
-            // The physical blocks still move on the Minecraft block grid, but entities are
-            // carried by the fractional velocity every server tick. This removes the old
-            // one-block player correction and makes standing/walking inside the vessel smooth.
-            if (continuousMotion.lengthSqr() > 1.0E-7D) {
-                moveCarriedEntities(level, vessel, continuousMotion);
+            float sizePenalty = Math.max(0.30F, 1.0F - Math.max(vessel.sizeX(), vessel.sizeZ()) / 96.0F);
+            float maxYawStep = BASE_YAW_RATE * sizePenalty;
+            float maxPitchStep = BASE_PITCH_RATE * sizePenalty;
+            float nextYaw = approachAngle(vessel.yaw, command.yaw, maxYawStep);
+            float nextPitch = approachLinear(vessel.pitch, Mth.clamp(command.pitch, -MAX_PITCH, MAX_PITCH), maxPitchStep);
+            double acceleration = targetSpeed < vessel.speed ? SPEED_BRAKE : SPEED_ACCELERATION;
+            double nextSpeed = approachLinear(vessel.speed, targetSpeed, acceleration);
+
+            Vec3 forward = SubmarineContraptionEntity.forward(nextYaw, nextPitch);
+            Vec3 motion = forward.scale(nextSpeed);
+            double nextX = vessel.posX + motion.x;
+            double nextY = vessel.posY + motion.y;
+            double nextZ = vessel.posZ + motion.z;
+
+            // Rotation can make the bow/stern sweep into an obstacle even with almost no linear
+            // movement, therefore collision is checked against the complete future transform.
+            if (!isTransformClear(level, contraption, nextX, nextY, nextZ, nextYaw, nextPitch)) {
+                vessel.speed = Math.max(0.0D, vessel.speed - SPEED_BRAKE * 2.0D);
+                // Try rotating in place only when that rotation itself is safe. This lets the
+                // autopilot turn away from a wall instead of permanently locking the rudder.
+                if (isTransformClear(level, contraption, vessel.posX, vessel.posY, vessel.posZ, nextYaw, nextPitch)) {
+                    moveCarriedEntities(level, vessel, contraption, vessel.posX, vessel.posY, vessel.posZ,
+                            vessel.yaw, vessel.pitch, vessel.posX, vessel.posY, vessel.posZ, nextYaw, nextPitch);
+                    vessel.yaw = nextYaw;
+                    vessel.pitch = nextPitch;
+                    contraption.setYRot(nextYaw);
+                    contraption.setXRot(nextPitch);
+                }
+                continue;
             }
+
+            double oldX = vessel.posX, oldY = vessel.posY, oldZ = vessel.posZ;
+            float oldYaw = vessel.yaw, oldPitch = vessel.pitch;
+            moveCarriedEntities(level, vessel, contraption, oldX, oldY, oldZ, oldYaw, oldPitch,
+                    nextX, nextY, nextZ, nextYaw, nextPitch);
+
+            vessel.posX = nextX;
+            vessel.posY = nextY;
+            vessel.posZ = nextZ;
+            vessel.yaw = nextYaw;
+            vessel.pitch = nextPitch;
+            vessel.speed = nextSpeed;
+            vessel.lastMoveTick = ticks;
+            contraption.setPos(nextX, nextY, nextZ);
+            contraption.setYRot(nextYaw);
+            contraption.setXRot(nextPitch);
+            updateVirtualTerminals(vessel, contraption);
+            changed = true;
         }
 
         if (ticks % 20L == 0L || changed) setDirty();
     }
 
-    private static double approach(double current, double target, double response) {
-        double next = current + (target - current) * response;
-        return Math.abs(next) < 1.0E-5D && Math.abs(target) < 1.0E-5D ? 0.0D : next;
+    private static double approachLinear(double current, double target, double step) {
+        if (current < target) return Math.min(target, current + step);
+        if (current > target) return Math.max(target, current - step);
+        return target;
     }
 
-    private static int wholeStep(double accumulator) {
-        return accumulator >= 1.0D ? 1 : accumulator <= -1.0D ? -1 : 0;
+    private static float approachLinear(float current, float target, float step) {
+        if (current < target) return Math.min(target, current + step);
+        if (current > target) return Math.max(target, current - step);
+        return target;
     }
 
-    private static int sign(double value) {
-        return value > 1.0E-4D ? 1 : value < -1.0E-4D ? -1 : 0;
+    private static float approachAngle(float current, float target, float maxStep) {
+        float delta = angleDifference(current, target);
+        if (Math.abs(delta) <= maxStep) return wrapDegrees(target);
+        return wrapDegrees(current + Math.copySign(maxStep, delta));
     }
 
-    private static void stopVessel(VesselState vessel) {
-        vessel.forwardVelocity *= 0.25D;
-        vessel.verticalVelocity *= 0.25D;
-        vessel.lateralVelocity *= 0.25D;
-        vessel.forwardAccumulator = Mth.clamp(vessel.forwardAccumulator, -0.95D, 0.95D);
-        vessel.verticalAccumulator = Mth.clamp(vessel.verticalAccumulator, -0.95D, 0.95D);
-        vessel.lateralAccumulator = Mth.clamp(vessel.lateralAccumulator, -0.95D, 0.95D);
+    private static float angleDifference(float from, float to) {
+        return Mth.wrapDegrees(to - from);
     }
 
-    private Vec3 desiredInput(ServerLevel level, TerminalState terminal, VesselState vessel) {
+    private static float wrapDegrees(float value) {
+        return Mth.wrapDegrees(value);
+    }
+
+    private MotionCommand desiredCommand(ServerLevel level, TerminalState terminal, VesselState vessel,
+                                         SubmarineContraptionEntity contraption) {
         if (!terminal.autopilot) {
             terminal.clearAvoidance();
-            return new Vec3(Mth.clamp(terminal.manualForward, -1.0F, 1.0F),
-                    Mth.clamp(terminal.manualVertical, -1.0F, 1.0F), 0.0D);
+            float yaw = terminal.manualHeadingSet ? terminal.manualTargetYaw : vessel.yaw;
+            float pitch = terminal.manualPitchSet ? terminal.manualTargetPitch : vessel.pitch;
+            return new MotionCommand(Mth.clamp(terminal.manualThrottle, 0.0F, 1.0F) * MAX_FORWARD_SPEED,
+                    yaw, pitch);
         }
 
-        BlockPos destination = null;
+        Vec3 destination = null;
         if (terminal.selectedDestination == 0) {
             if (terminal.maintainPos == null) terminal.maintainPos = vessel.anchor();
-            destination = terminal.maintainPos;
+            destination = Vec3.atCenterOf(terminal.maintainPos);
         } else {
             List<NavigationTarget> targetList = relevantTargets(level, vessel.anchor());
             int index = terminal.selectedDestination - 1;
-            if (index >= 0 && index < targetList.size()) destination = targetList.get(index).pos;
+            if (index >= 0 && index < targetList.size()) destination = Vec3.atCenterOf(targetList.get(index).pos);
         }
-        if (destination == null) return Vec3.ZERO;
+        if (destination == null) return new MotionCommand(0.0D, vessel.yaw, vessel.pitch);
 
-        BlockPos anchor = vessel.anchor();
-        Vec3 worldDifference = new Vec3(destination.getX() - anchor.getX(),
-                destination.getY() - anchor.getY(), destination.getZ() - anchor.getZ());
-        if (worldDifference.lengthSqr() < 2.25D) {
+        Vec3 center = new Vec3(vessel.posX, vessel.posY, vessel.posZ);
+        Vec3 difference = destination.subtract(center);
+        double distance = difference.length();
+        if (distance < 1.25D) {
             terminal.clearAvoidance();
-            return Vec3.ZERO;
+            return new MotionCommand(0.0D, vessel.yaw, vessel.pitch);
         }
 
-        Direction facing = facingAt(level,
-                terminal.currentTerminalPos == null ? vessel.anchor() : terminal.currentTerminalPos);
-        Direction right = facing.getClockWise();
-        double forward = worldDifference.x * facing.getStepX() + worldDifference.z * facing.getStepZ();
-        double lateral = worldDifference.x * right.getStepX() + worldDifference.z * right.getStepZ();
-        double vertical = worldDifference.y;
-        double maximum = Math.max(1.0D, Math.max(Math.abs(forward), Math.max(Math.abs(vertical), Math.abs(lateral))));
-        Vec3 directLocal = new Vec3(forward / maximum, vertical / maximum, lateral / maximum);
+        Vec3 desiredDirection = difference.normalize();
+        float desiredYaw = yawFromDirection(desiredDirection);
+        float desiredPitch = pitchFromDirection(desiredDirection);
 
-        int directX = sign(worldDifference.x);
-        int directY = sign(worldDifference.y);
-        int directZ = sign(worldDifference.z);
-        if (isCorridorClear(level, vessel, directX, directY, directZ, 2)) {
-            terminal.clearAvoidance();
-            return directLocal;
+        // A Create-like carrier follows a curved course. Test a family of yaw/pitch headings and
+        // select the clear one that still makes the most progress towards the destination.
+        if (contraption != null) {
+            HeadingCandidate candidate = chooseHeading(level, contraption, vessel, desiredDirection, desiredYaw, desiredPitch);
+            if (candidate != null) {
+                desiredYaw = candidate.yaw;
+                desiredPitch = candidate.pitch;
+            } else {
+                return new MotionCommand(0.0D, vessel.yaw, vessel.pitch);
+            }
         }
 
-        if (terminal.avoidanceTicks > 0
-                && isCorridorClear(level, vessel, terminal.avoidanceX, terminal.avoidanceY,
-                terminal.avoidanceZ, AUTOPILOT_LOOKAHEAD)) {
-            terminal.avoidanceTicks--;
-            return worldStepToLocal(terminal.avoidanceX, terminal.avoidanceY,
-                    terminal.avoidanceZ, facing, right);
-        }
+        double slowdown = Mth.clamp(distance / 18.0D, 0.18D, 1.0D);
+        return new MotionCommand(MAX_FORWARD_SPEED * slowdown, desiredYaw, desiredPitch);
+    }
 
-        int[] detour = chooseDetour(level, vessel, destination, directX, directY, directZ);
-        if (detour == null) {
-            terminal.clearAvoidance();
-            return Vec3.ZERO;
+    private HeadingCandidate chooseHeading(ServerLevel level, SubmarineContraptionEntity contraption,
+                                             VesselState vessel, Vec3 desiredDirection,
+                                             float desiredYaw, float desiredPitch) {
+        float[] yawOffsets = {0, -18, 18, -35, 35, -60, 60, -90, 90};
+        float[] pitchOffsets = {0, 14, -14, 28, -28, 42, -42};
+        HeadingCandidate best = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
+        for (float yawOffset : yawOffsets) {
+            for (float pitchOffset : pitchOffsets) {
+                float yaw = wrapDegrees(desiredYaw + yawOffset);
+                float pitch = Mth.clamp(desiredPitch + pitchOffset, -MAX_PITCH, MAX_PITCH);
+                Vec3 direction = SubmarineContraptionEntity.forward(yaw, pitch);
+                if (!corridorClear(level, contraption, vessel, direction, yaw, pitch, AUTOPILOT_LOOKAHEAD)) continue;
+                double progress = direction.dot(desiredDirection);
+                double turnPenalty = Math.abs(yawOffset) * 0.0025D + Math.abs(pitchOffset) * 0.0035D;
+                double score = progress - turnPenalty;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = new HeadingCandidate(yaw, pitch);
+                }
+            }
         }
-        terminal.avoidanceX = detour[0];
-        terminal.avoidanceY = detour[1];
-        terminal.avoidanceZ = detour[2];
-        terminal.avoidanceTicks = 30;
-        return worldStepToLocal(detour[0], detour[1], detour[2], facing, right);
+        return best;
+    }
+
+    private boolean corridorClear(ServerLevel level, SubmarineContraptionEntity contraption,
+                                  VesselState vessel, Vec3 direction, float yaw, float pitch, int blocks) {
+        for (int i = 1; i <= blocks; i++) {
+            double distance = i * 1.0D;
+            if (!isTransformClear(level, contraption, vessel.posX + direction.x * distance,
+                    vessel.posY + direction.y * distance, vessel.posZ + direction.z * distance, yaw, pitch)) return false;
+        }
+        return true;
+    }
+
+    private static float yawFromDirection(Vec3 direction) {
+        return wrapDegrees((float)Math.toDegrees(Math.atan2(direction.z, direction.x)));
+    }
+
+    private static float pitchFromDirection(Vec3 direction) {
+        double horizontal = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+        return Mth.clamp((float)Math.toDegrees(Math.atan2(direction.y, horizontal)), -MAX_PITCH, MAX_PITCH);
+    }
+
+    private record MotionCommand(double speed, float yaw, float pitch) {}
+    private record HeadingCandidate(float yaw, float pitch) {}
+
+    private SubmarineContraptionEntity getContraption(ServerLevel level, VesselState vessel) {
+        if (vessel.contraptionEntity == null) return null;
+        Entity entity = level.getEntity(vessel.contraptionEntity);
+        if (entity instanceof SubmarineContraptionEntity submarine && submarine.isAlive()) return submarine;
+        return null;
+    }
+
+    private SubmarineContraptionEntity activateContraption(ServerLevel level, VesselState vessel, BlockPos terminalPos) {
+        BlockPos oldMin = vessel.min;
+        BlockPos oldMax = vessel.max;
+        Direction initialFacing = facingAt(level, terminalPos);
+        boolean power = NavigationSystem.hasPower(level, terminalPos);
+        SubmarineContraptionEntity contraption = SubmarineContraptionEntity.capture(level, vessel.id, oldMin, oldMax);
+        if (contraption == null) return null;
+
+        vessel.contraptionEntity = contraption.getUUID();
+        vessel.detached = true;
+        vessel.detachedPower = power;
+        vessel.posX = contraption.getX();
+        vessel.posY = contraption.getY();
+        vessel.posZ = contraption.getZ();
+        vessel.yaw = yawForDirection(initialFacing);
+        vessel.pitch = 0.0F;
+        vessel.speed = 0.0D;
+        contraption.setYRot(vessel.yaw);
+        contraption.setXRot(vessel.pitch);
+        vessel.hullCache = null;
+        vessel.hullCacheTick = Long.MIN_VALUE;
+
+        for (Map.Entry<Long, TerminalState> entry : terminals.entrySet()) {
+            TerminalState terminal = entry.getValue();
+            if (!vessel.id.equals(terminal.vesselId)) continue;
+            BlockPos pos = BlockPos.of(entry.getKey());
+            if (!inside(oldMin, oldMax, pos)) continue;
+            terminal.virtualTerminal = true;
+            terminal.virtualLocalX = pos.getX() + 0.5D - vessel.posX;
+            terminal.virtualLocalY = pos.getY() + 0.5D - vessel.posY;
+            terminal.virtualLocalZ = pos.getZ() + 0.5D - vessel.posZ;
+            terminal.currentTerminalPos = pos;
+            if (!terminal.manualHeadingSet) terminal.manualTargetYaw = vessel.yaw;
+            if (!terminal.manualPitchSet) terminal.manualTargetPitch = vessel.pitch;
+        }
+        updateVirtualTerminals(vessel, contraption);
+        return contraption;
+    }
+
+    private static boolean inside(BlockPos min, BlockPos max, BlockPos pos) {
+        return pos.getX() >= min.getX() && pos.getX() <= max.getX()
+                && pos.getY() >= min.getY() && pos.getY() <= max.getY()
+                && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
+    }
+
+    private static float yawForDirection(Direction direction) {
+        return switch (direction) {
+            case SOUTH -> 90.0F;
+            case WEST -> 180.0F;
+            case NORTH -> -90.0F;
+            default -> 0.0F;
+        };
+    }
+
+    private boolean isTransformClear(ServerLevel level, SubmarineContraptionEntity contraption,
+                                     double x, double y, double z, float yaw, float pitch) {
+        AABB bounds = contraption.transformedBounds(x, y, z, yaw, pitch).deflate(0.03D);
+        BlockPos min = BlockPos.containing(bounds.minX, bounds.minY, bounds.minZ);
+        BlockPos max = BlockPos.containing(bounds.maxX, bounds.maxY, bounds.maxZ);
+        if (!level.isInWorldBounds(min) || !level.isInWorldBounds(max)) return false;
+        // Never steer an active contraption into an unloaded area. Checking all four horizontal
+        // corners catches a multi-chunk hull without forcing chunk generation from the navigation tick.
+        if (!level.hasChunkAt(min) || !level.hasChunkAt(max)
+                || !level.hasChunkAt(new BlockPos(min.getX(), min.getY(), max.getZ()))
+                || !level.hasChunkAt(new BlockPos(max.getX(), min.getY(), min.getZ()))) return false;
+        return !level.getBlockCollisions(contraption, bounds).iterator().hasNext();
+    }
+
+    private void moveCarriedEntities(ServerLevel level, VesselState vessel,
+                                     SubmarineContraptionEntity contraption,
+                                     double oldX, double oldY, double oldZ, float oldYaw, float oldPitch,
+                                     double newX, double newY, double newZ, float newYaw, float newPitch) {
+        AABB oldBounds = contraption.transformedBounds(oldX, oldY, oldZ, oldYaw, oldPitch);
+        AABB newBounds = contraption.transformedBounds(newX, newY, newZ, newYaw, newPitch);
+        AABB search = new AABB(Math.min(oldBounds.minX, newBounds.minX), Math.min(oldBounds.minY, newBounds.minY),
+                Math.min(oldBounds.minZ, newBounds.minZ), Math.max(oldBounds.maxX, newBounds.maxX),
+                Math.max(oldBounds.maxY, newBounds.maxY), Math.max(oldBounds.maxZ, newBounds.maxZ)).inflate(1.25D);
+        AABB localBounds = contraption.localBounds().inflate(0.9D, 1.4D, 0.9D);
+        float yawDelta = angleDifference(oldYaw, newYaw);
+
+        List<Entity> carried = level.getEntities((Entity)null, search, entity -> entity.isAlive()
+                && entity != contraption
+                && !(entity instanceof net.minecraft.world.entity.decoration.HangingEntity)
+                && !entity.isPassenger());
+        for (Entity entity : carried) {
+            Vec3 local = contraption.worldToLocal(entity.position(), oldX, oldY, oldZ, oldYaw, oldPitch);
+            if (!localBounds.contains(local)) continue;
+
+            // Keep feet attached to a deck when gravity would otherwise make the player fall through
+            // the virtualised hull. Walking/jumping still changes the local coordinates normally.
+            if (entity instanceof LivingEntity && entity.getDeltaMovement().y <= 0.0D) {
+                double support = contraption.supportHeight(local.x, local.y, local.z);
+                if (!Double.isNaN(support) && local.y < support + 0.20D && local.y > support - 0.65D) {
+                    local = new Vec3(local.x, support + 0.002D, local.z);
+                    Vec3 velocity = entity.getDeltaMovement();
+                    entity.setDeltaMovement(velocity.x, Math.max(0.0D, velocity.y), velocity.z);
+                }
+            }
+
+            Vec3 target = contraption.localToWorld(local, newX, newY, newZ, newYaw, newPitch);
+            Vec3 delta = target.subtract(entity.position());
+            entity.setPos(target.x, target.y, target.z);
+            entity.fallDistance = 0.0F;
+            if (entity instanceof ServerPlayer player) {
+                player.setYRot(player.getYRot() + yawDelta);
+                player.setYHeadRot(player.getYHeadRot() + yawDelta);
+                NavigationPackets.sendVesselMotion(player, delta, yawDelta);
+            }
+        }
+    }
+
+    private void updateVirtualTerminals(VesselState vessel, SubmarineContraptionEntity contraption) {
+        Map<Long, TerminalState> updated = new HashMap<>();
+        for (Map.Entry<Long, TerminalState> entry : terminals.entrySet()) {
+            TerminalState terminal = entry.getValue();
+            if (!vessel.id.equals(terminal.vesselId) || !terminal.virtualTerminal) {
+                updated.put(entry.getKey(), terminal);
+                continue;
+            }
+            BlockPos oldPos = BlockPos.of(entry.getKey());
+            Vec3 local = new Vec3(terminal.virtualLocalX, terminal.virtualLocalY, terminal.virtualLocalZ);
+            Vec3 world = contraption.localToWorld(local, vessel.posX, vessel.posY, vessel.posZ, vessel.yaw, vessel.pitch);
+            BlockPos newPos = BlockPos.containing(world);
+            terminal.currentTerminalPos = newPos;
+            updated.put(newPos.asLong(), terminal);
+            if (!oldPos.equals(newPos)) aliases.put(oldPos.asLong(), new Alias(newPos.asLong(), ticks + 1_200L));
+        }
+        terminals.clear();
+        terminals.putAll(updated);
+    }
+
+    public boolean isVirtualNavigationTerminal(BlockPos rawPos) {
+        BlockPos pos = resolveTerminalPos(rawPos);
+        TerminalState terminal = terminals.get(pos.asLong());
+        return terminal != null && terminal.virtualTerminal && terminal.vesselId != null;
+    }
+
+    public boolean virtualTerminalPowered(BlockPos rawPos) {
+        BlockPos pos = resolveTerminalPos(rawPos);
+        TerminalState terminal = terminals.get(pos.asLong());
+        VesselState vessel = terminal == null ? null : vessels.get(terminal.vesselId);
+        return vessel != null && vessel.detached && vessel.detachedPower;
     }
 
     private int[] chooseDetour(ServerLevel level, VesselState vessel, BlockPos destination,
@@ -476,29 +667,6 @@ public final class NavigationWorldData extends SavedData {
     }
 
 
-    private void moveCarriedEntities(ServerLevel level, VesselState vessel, Vec3 delta) {
-        AABB bounds = new AABB(
-                vessel.min.getX() - 0.35D, vessel.min.getY() - 0.75D, vessel.min.getZ() - 0.35D,
-                vessel.max.getX() + 1.35D, vessel.max.getY() + 3.0D, vessel.max.getZ() + 1.35D);
-        List<Entity> carried = level.getEntities((Entity) null, bounds,
-                entity -> entity.isAlive()
-                        && !(entity instanceof net.minecraft.world.entity.decoration.HangingEntity)
-                        && !entity.isPassenger());
-        for (Entity entity : carried) {
-            double x = entity.getX() + delta.x;
-            double y = entity.getY() + delta.y;
-            double z = entity.getZ() + delta.z;
-            if (entity instanceof ServerPlayer player) {
-                player.setPos(x, y, z);
-                player.fallDistance = 0.0F;
-                NavigationPackets.sendVesselMotion(player, delta);
-            } else {
-                entity.setPos(x, y, z);
-                entity.fallDistance = 0.0F;
-            }
-        }
-    }
-
     private void translateTerminalsAndAliases(VesselState vessel, int dx, int dy, int dz) {
         Map<Long, TerminalState> translated = new HashMap<>();
         for (Map.Entry<Long, TerminalState> entry : terminals.entrySet()) {
@@ -533,7 +701,8 @@ public final class NavigationWorldData extends SavedData {
 
         CompoundTag tag = new CompoundTag();
         tag.putLong("TerminalPos", terminalPos.asLong());
-        tag.putBoolean("Powered", NavigationSystem.hasPower(level, terminalPos));
+        tag.putBoolean("Powered", vessel != null && vessel.detached
+                ? vessel.detachedPower : NavigationSystem.hasPower(level, terminalPos));
         tag.putBoolean("ActiveSonar", terminal.activeSonar);
         tag.putBoolean("Directional", terminal.directional);
         tag.putBoolean("Autopilot", terminal.autopilot);
@@ -541,6 +710,9 @@ public final class NavigationWorldData extends SavedData {
         tag.putInt("SelectedDestination", terminal.selectedDestination);
         tag.putFloat("ManualForward", terminal.manualForward);
         tag.putFloat("ManualVertical", terminal.manualVertical);
+        tag.putFloat("ManualTargetYaw", terminal.manualTargetYaw);
+        tag.putFloat("ManualTargetPitch", terminal.manualTargetPitch);
+        tag.putFloat("ManualThrottle", terminal.manualThrottle);
         tag.putFloat("BeamAngle", terminal.beamAngle);
         tag.putBoolean("TemplateMode", terminal.templateMode);
         tag.putByteArray("SectionActions", terminal.sectionActions.clone());
@@ -572,19 +744,24 @@ public final class NavigationWorldData extends SavedData {
         tag.putLong("VesselMax", vessel.max.asLong());
         BlockPos anchor = vessel.anchor();
         tag.putLong("Anchor", anchor.asLong());
-        tag.putDouble("ForwardSpeedKmh", vessel.forwardVelocity * 20.0D * 3.6D);
-        tag.putDouble("VerticalSpeedKmh", -vessel.verticalVelocity * 20.0D * 3.6D);
-        tag.putDouble("LateralSpeedKmh", vessel.lateralVelocity * 20.0D * 3.6D);
-        tag.putInt("Depth", Math.max(0, level.getSeaLevel() - anchor.getY()));
-        tag.putBoolean("Docked", vessel.origin.distSqr(anchor) < 16.0D
-                && Math.abs(vessel.forwardVelocity) < 0.005D
-                && Math.abs(vessel.verticalVelocity) < 0.005D
-                && Math.abs(vessel.lateralVelocity) < 0.005D);
+        tag.putDouble("AnchorX", vessel.posX);
+        tag.putDouble("AnchorY", vessel.posY);
+        tag.putDouble("AnchorZ", vessel.posZ);
+        tag.putFloat("Yaw", vessel.yaw);
+        tag.putFloat("Pitch", vessel.pitch);
+        tag.putDouble("ThrottleSpeed", vessel.speed);
+        Vec3 vesselForward = SubmarineContraptionEntity.forward(vessel.yaw, vessel.pitch).scale(vessel.speed);
+        double horizontalSpeed = Math.sqrt(vesselForward.x * vesselForward.x + vesselForward.z * vesselForward.z);
+        tag.putDouble("ForwardSpeedKmh", horizontalSpeed * 20.0D * 3.6D);
+        tag.putDouble("VerticalSpeedKmh", -vesselForward.y * 20.0D * 3.6D);
+        tag.putDouble("LateralSpeedKmh", 0.0D);
+        tag.putInt("Depth", Math.max(0, Mth.floor(level.getSeaLevel() - vessel.posY)));
+        tag.putBoolean("Docked", vessel.origin.distSqr(anchor) < 16.0D && vessel.speed < 0.005D);
         SonarSnapshot sonar = sonarSnapshot(level, terminalPos, terminal, vessel);
         tag.putIntArray("Sonar", sonar.obstacles);
         putSonarContacts(tag, sonar.contacts);
         putHandSonars(tag, sonar.handSonars);
-        Direction.Axis hullAxis = facingAt(level, terminalPos).getAxis();
+        Direction.Axis hullAxis = vessel.detached ? Direction.Axis.X : facingAt(level, terminalPos).getAxis();
         tag.putByteArray("HullGrid", buildHullGridCached(level, terminalPos, vessel));
         tag.putInt("HullColumns", hullColumns(vessel, hullAxis));
         tag.putInt("HullRows", hullRows(vessel));
@@ -604,13 +781,12 @@ public final class NavigationWorldData extends SavedData {
             return terminal.sonarCache;
         }
 
-        Direction facing = facingAt(level, terminalPos);
         double range = Mth.lerp(terminal.zoom / 100.0D, 220.0D, 72.0D);
         int[] obstacles = terminal.activeSonar
-                ? scanSonarObstacles(level, terminal, vessel, facing, range)
+                ? scanSonarObstacles(level, terminal, vessel, range)
                 : new int[SONAR_RAYS];
-        List<SonarContact> contacts = collectSonarContacts(level, terminal, vessel, facing, range);
-        List<HandSonarContact> handSonars = collectHandSonars(level, terminal, vessel, facing, range);
+        List<SonarContact> contacts = collectSonarContacts(level, terminal, vessel, range);
+        List<HandSonarContact> handSonars = collectHandSonars(level, terminal, vessel, range);
 
         SonarSnapshot snapshot = new SonarSnapshot(obstacles, contacts, handSonars);
         terminal.sonarCache = snapshot;
@@ -623,19 +799,18 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private int[] scanSonarObstacles(ServerLevel level, TerminalState terminal, VesselState vessel,
-                                     Direction facing, double maxDistance) {
+                                     double maxDistance) {
         int[] distances = new int[SONAR_RAYS];
-        BlockPos origin = vessel.anchor();
+        Vec3 origin = vessel.anchorVec();
+        Vec3 forwardAxis = SubmarineContraptionEntity.forward(vessel.yaw, vessel.pitch);
+        Vec3 upAxis = SubmarineContraptionEntity.rotateLocal(new Vec3(0.0D, 1.0D, 0.0D), vessel.yaw, vessel.pitch).normalize();
         for (int i = 0; i < SONAR_RAYS; i++) {
             double angle = Math.PI * 2.0D * i / SONAR_RAYS;
             if (terminal.directional && angularDifference((float) angle, terminal.beamAngle) > 0.30F) continue;
-            double forward = Math.cos(angle);
-            double vertical = Math.sin(angle);
+            Vec3 ray = forwardAxis.scale(Math.cos(angle)).add(upAxis.scale(Math.sin(angle))).normalize();
             for (double distance = 3.0D; distance <= maxDistance; distance += SONAR_STEP) {
-                int x = Mth.floor(origin.getX() + facing.getStepX() * forward * distance);
-                int y = Mth.floor(origin.getY() + vertical * distance);
-                int z = Mth.floor(origin.getZ() + facing.getStepZ() * forward * distance);
-                BlockPos sample = new BlockPos(x, y, z);
+                Vec3 samplePoint = origin.add(ray.scale(distance));
+                BlockPos sample = BlockPos.containing(samplePoint);
                 if (vessel.contains(sample)) continue;
                 if (!level.hasChunkAt(sample)) break;
                 BlockState state = level.getBlockState(sample);
@@ -649,17 +824,16 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private List<SonarContact> collectSonarContacts(ServerLevel level, TerminalState terminal,
-                                                     VesselState vessel, Direction facing, double range) {
-        BlockPos anchor = vessel.anchor();
-        Vec3 center = Vec3.atCenterOf(anchor);
-        AABB area = new AABB(anchor).inflate(range);
+                                                     VesselState vessel, double range) {
+        Vec3 center = vessel.anchorVec();
+        AABB area = new AABB(center, center).inflate(range);
         List<SonarContact> contacts = new ArrayList<>();
         for (Entity entity : level.getEntities((Entity) null, area,
                 entity -> entity.isAlive() && entity instanceof LivingEntity
                         && !(entity instanceof ServerPlayer)
                         && !vessel.contains(entity.blockPosition()))) {
             Vec3 delta = entity.position().subtract(center);
-            SonarProjection projection = projectToSonar(delta, facing, range);
+            SonarProjection projection = projectToSonar(delta, vessel, range);
             if (projection == null) continue;
             float angle = (float) Math.atan2(projection.y, projection.x);
             if (terminal.directional && angularDifference(angle, terminal.beamAngle) > 0.32F) continue;
@@ -675,16 +849,15 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private List<HandSonarContact> collectHandSonars(ServerLevel level, TerminalState terminal,
-                                                      VesselState vessel, Direction facing, double range) {
-        BlockPos anchor = vessel.anchor();
-        Vec3 center = Vec3.atCenterOf(anchor);
+                                                      VesselState vessel, double range) {
+        Vec3 center = vessel.anchorVec();
         List<HandSonarContact> result = new ArrayList<>();
         for (ServerPlayer player : level.players()) {
             boolean active = player.getMainHandItem().is(ModItems.ACTIVE_HAND_SONAR.get())
                     || player.getOffhandItem().is(ModItems.ACTIVE_HAND_SONAR.get());
             if (!active) continue;
             Vec3 delta = player.position().subtract(center);
-            SonarProjection projection = projectToSonar(delta, facing, range);
+            SonarProjection projection = projectToSonar(delta, vessel, range);
             if (projection == null) continue;
             float angle = (float) Math.atan2(projection.y, projection.x);
             if (terminal.directional && angularDifference(angle, terminal.beamAngle) > 0.32F) continue;
@@ -694,17 +867,15 @@ public final class NavigationWorldData extends SavedData {
         return result;
     }
 
-    private SonarProjection projectToSonar(Vec3 delta, Direction facing, double range) {
-        Direction right = facing.getClockWise();
-        double forward = delta.x * facing.getStepX() + delta.z * facing.getStepZ();
-        double lateral = delta.x * right.getStepX() + delta.z * right.getStepZ();
-        double horizontalMagnitude = Math.sqrt(forward * forward + lateral * lateral);
+    private SonarProjection projectToSonar(Vec3 delta, VesselState vessel, double range) {
+        Vec3 local = SubmarineContraptionEntity.inverseRotate(delta, vessel.yaw, vessel.pitch);
+        double horizontalMagnitude = Math.sqrt(local.x * local.x + local.z * local.z);
         double signedHorizontal = Math.copySign(horizontalMagnitude,
-                Math.abs(forward) > 0.001D ? forward : lateral);
-        if (Math.abs(signedHorizontal) > range || Math.abs(delta.y) > range) return null;
-        double radiusSquared = signedHorizontal * signedHorizontal + delta.y * delta.y;
+                Math.abs(local.x) > 0.001D ? local.x : local.z);
+        if (Math.abs(signedHorizontal) > range || Math.abs(local.y) > range) return null;
+        double radiusSquared = signedHorizontal * signedHorizontal + local.y * local.y;
         if (radiusSquared > range * range) return null;
-        return new SonarProjection((float) (signedHorizontal / range), (float) (-delta.y / range));
+        return new SonarProjection((float) (signedHorizontal / range), (float) (-local.y / range));
     }
 
     private boolean isHostile(Entity entity) {
@@ -749,7 +920,7 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private byte[] buildHullGridCached(ServerLevel level, BlockPos terminalPos, VesselState vessel) {
-        Direction.Axis axis = facingAt(level, terminalPos).getAxis();
+        Direction.Axis axis = vessel.detached ? Direction.Axis.X : facingAt(level, terminalPos).getAxis();
         if (vessel.hullCache != null && vessel.hullCacheAxis == axis
                 && ticks - vessel.hullCacheTick < 20L) {
             return vessel.hullCache.clone();
@@ -761,16 +932,29 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private byte[] buildHullGrid(ServerLevel level, BlockPos terminalPos, VesselState vessel) {
-        Direction facing = facingAt(level, terminalPos);
-        Direction.Axis axis = facing.getAxis();
+        Direction.Axis axis = vessel.detached ? Direction.Axis.X : facingAt(level, terminalPos).getAxis();
         int columns = hullColumns(vessel, axis);
         int rows = hullRows(vessel);
         byte[] grid = new byte[columns * rows];
+
+        if (vessel.detached) {
+            SubmarineContraptionEntity contraption = getContraption(level, vessel);
+            if (contraption == null) return grid;
+            int horizontalSize = Math.max(1, contraption.sizeX());
+            int verticalSize = Math.max(1, contraption.sizeY());
+            for (SubmarineContraptionEntity.BlockSnapshot snapshot : contraption.blocks()) {
+                if (snapshot.state().isAir()) continue;
+                int column = Mth.clamp(snapshot.x() * columns / horizontalSize, 0, columns - 1);
+                int row = Mth.clamp((contraption.sizeY() - 1 - snapshot.y()) * rows / verticalSize, 0, rows - 1);
+                grid[row * columns + column] = 1;
+            }
+            return grid;
+        }
+
         int horizontalMin = axis == Direction.Axis.X ? vessel.min.getX() : vessel.min.getZ();
         int horizontalMax = axis == Direction.Axis.X ? vessel.max.getX() : vessel.max.getZ();
         int horizontalSize = Math.max(1, horizontalMax - horizontalMin + 1);
         int verticalSize = Math.max(1, vessel.max.getY() - vessel.min.getY() + 1);
-
         for (BlockPos cursor : BlockPos.betweenClosed(vessel.min, vessel.max)) {
             BlockState state = level.getBlockState(cursor);
             if (state.isAir() && state.getFluidState().isEmpty()) continue;
@@ -779,8 +963,6 @@ public final class NavigationWorldData extends SavedData {
             int row = Mth.clamp((vessel.max.getY() - cursor.getY()) * rows / verticalSize, 0, rows - 1);
             int index = row * columns + column;
             if (!state.getFluidState().isEmpty()) {
-                // Water is only promoted to flooding when the projected cell already belongs to
-                // the real construction. This avoids painting the entire surrounding ocean orange.
                 if (grid[index] == 1) grid[index] = 2;
             } else {
                 grid[index] = grid[index] == 2 ? (byte)2 : (byte)1;
@@ -790,14 +972,14 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private int hullColumns(VesselState vessel, Direction.Axis axis) {
-        int size = axis == Direction.Axis.X
+        int size = vessel.detached ? vessel.sizeX() : (axis == Direction.Axis.X
                 ? vessel.max.getX() - vessel.min.getX() + 1
-                : vessel.max.getZ() - vessel.min.getZ() + 1;
+                : vessel.max.getZ() - vessel.min.getZ() + 1);
         return Mth.clamp(size, 1, STATUS_COLUMNS);
     }
 
     private int hullRows(VesselState vessel) {
-        return Mth.clamp(vessel.max.getY() - vessel.min.getY() + 1, 1, STATUS_ROWS);
+        return Mth.clamp(vessel.detached ? vessel.sizeY() : vessel.max.getY() - vessel.min.getY() + 1, 1, STATUS_ROWS);
     }
 
     private static byte[] templateHullGrid() {
@@ -818,12 +1000,33 @@ public final class NavigationWorldData extends SavedData {
     }
 
     private void putCrew(ServerLevel level, CompoundTag tag, BlockPos terminalPos, VesselState vessel) {
+        ListTag crew = new ListTag();
+        if (vessel.detached) {
+            SubmarineContraptionEntity contraption = getContraption(level, vessel);
+            if (contraption != null) {
+                AABB bounds = contraption.transformedBounds(vessel.posX, vessel.posY, vessel.posZ, vessel.yaw, vessel.pitch).inflate(0.5D);
+                for (ServerPlayer player : level.players()) {
+                    if (!bounds.contains(player.position())) continue;
+                    Vec3 local = contraption.worldToLocal(player.position(), vessel.posX, vessel.posY, vessel.posZ, vessel.yaw, vessel.pitch);
+                    AABB localBounds = contraption.localBounds();
+                    if (!localBounds.inflate(0.75D).contains(local)) continue;
+                    CompoundTag row = new CompoundTag();
+                    row.putUUID("Uuid", player.getUUID());
+                    row.putString("Name", player.getGameProfile().getName());
+                    row.putFloat("X", (float)Mth.clamp((local.x - localBounds.minX) / Math.max(1.0D, localBounds.getXsize()), 0.0D, 1.0D));
+                    row.putFloat("Y", (float)Mth.clamp((localBounds.maxY - local.y) / Math.max(1.0D, localBounds.getYsize()), 0.0D, 1.0D));
+                    crew.add(row);
+                }
+            }
+            tag.put("Crew", crew);
+            return;
+        }
+
         Direction facing = facingAt(level, terminalPos);
         int horizontalMin = facing.getAxis() == Direction.Axis.X ? vessel.min.getX() : vessel.min.getZ();
         int horizontalMax = facing.getAxis() == Direction.Axis.X ? vessel.max.getX() : vessel.max.getZ();
         double horizontalSize = Math.max(1.0D, horizontalMax - horizontalMin + 1.0D);
         double verticalSize = Math.max(1.0D, vessel.max.getY() - vessel.min.getY() + 1.0D);
-        ListTag crew = new ListTag();
         AABB bounds = new AABB(vessel.min, vessel.max.offset(1, 1, 1));
         for (ServerPlayer player : level.players()) {
             if (!bounds.contains(player.position())) continue;
@@ -923,8 +1126,17 @@ public final class NavigationWorldData extends SavedData {
         private boolean autopilot = true;
         private int zoom = 35;
         private int selectedDestination;
-        private float manualForward;
-        private float manualVertical;
+        private float manualForward; // legacy save migration
+        private float manualVertical; // legacy save migration
+        private float manualTargetYaw;
+        private float manualTargetPitch;
+        private float manualThrottle;
+        private boolean manualHeadingSet;
+        private boolean manualPitchSet;
+        private boolean virtualTerminal;
+        private double virtualLocalX;
+        private double virtualLocalY;
+        private double virtualLocalZ;
         private float beamAngle;
         private BlockPos maintainPos;
         private boolean templateMode;
@@ -971,8 +1183,28 @@ public final class NavigationWorldData extends SavedData {
             clearAvoidance();
         }
         public void setManual(float forward, float vertical) {
+            // Compatibility with pre-rigid-motion clients. Treat the old vector as a throttle and
+            // vertical pitch request instead of lateral block-grid movement.
             manualForward = Mth.clamp(forward, -1.0F, 1.0F);
             manualVertical = Mth.clamp(vertical, -1.0F, 1.0F);
+            manualThrottle = Mth.clamp((float)Math.sqrt(forward * forward + vertical * vertical), 0.0F, 1.0F);
+            manualTargetPitch = Mth.clamp(vertical * MAX_PITCH, -MAX_PITCH, MAX_PITCH);
+            manualPitchSet = true;
+        }
+        public void setManualHeading(float yaw, float throttle) {
+            manualTargetYaw = wrapDegrees(yaw);
+            manualThrottle = Mth.clamp(throttle, 0.0F, 1.0F);
+            manualHeadingSet = true;
+        }
+        public void setManualPitch(float pitch) {
+            manualTargetPitch = Mth.clamp(pitch, -MAX_PITCH, MAX_PITCH);
+            manualPitchSet = true;
+        }
+        public void initialiseManual(float yaw, float pitch) {
+            manualTargetYaw = wrapDegrees(yaw);
+            manualTargetPitch = Mth.clamp(pitch, -MAX_PITCH, MAX_PITCH);
+            manualHeadingSet = true;
+            manualPitchSet = true;
         }
         public void setBeamAngle(float angle) {
             beamAngle = angle;
@@ -1011,6 +1243,15 @@ public final class NavigationWorldData extends SavedData {
             tag.putInt("SelectedDestination", selectedDestination);
             tag.putFloat("ManualForward", manualForward);
             tag.putFloat("ManualVertical", manualVertical);
+            tag.putFloat("ManualTargetYaw", manualTargetYaw);
+            tag.putFloat("ManualTargetPitch", manualTargetPitch);
+            tag.putFloat("ManualThrottle", manualThrottle);
+            tag.putBoolean("ManualHeadingSet", manualHeadingSet);
+            tag.putBoolean("ManualPitchSet", manualPitchSet);
+            tag.putBoolean("VirtualTerminal", virtualTerminal);
+            tag.putDouble("VirtualLocalX", virtualLocalX);
+            tag.putDouble("VirtualLocalY", virtualLocalY);
+            tag.putDouble("VirtualLocalZ", virtualLocalZ);
             tag.putFloat("BeamAngle", beamAngle);
             tag.putBoolean("TemplateMode", templateMode);
             tag.putByteArray("SectionActions", sectionActions);
@@ -1028,6 +1269,16 @@ public final class NavigationWorldData extends SavedData {
             state.selectedDestination = Math.max(0, tag.getInt("SelectedDestination"));
             state.manualForward = tag.getFloat("ManualForward");
             state.manualVertical = tag.getFloat("ManualVertical");
+            state.manualTargetYaw = tag.getFloat("ManualTargetYaw");
+            state.manualTargetPitch = tag.getFloat("ManualTargetPitch");
+            state.manualThrottle = tag.contains("ManualThrottle") ? tag.getFloat("ManualThrottle")
+                    : Mth.clamp((float)Math.sqrt(state.manualForward * state.manualForward + state.manualVertical * state.manualVertical), 0.0F, 1.0F);
+            state.manualHeadingSet = tag.getBoolean("ManualHeadingSet");
+            state.manualPitchSet = tag.getBoolean("ManualPitchSet");
+            state.virtualTerminal = tag.getBoolean("VirtualTerminal");
+            state.virtualLocalX = tag.getDouble("VirtualLocalX");
+            state.virtualLocalY = tag.getDouble("VirtualLocalY");
+            state.virtualLocalZ = tag.getDouble("VirtualLocalZ");
             state.beamAngle = tag.getFloat("BeamAngle");
             state.templateMode = tag.getBoolean("TemplateMode");
             byte[] actions = tag.getByteArray("SectionActions");
@@ -1044,12 +1295,21 @@ public final class NavigationWorldData extends SavedData {
         private BlockPos max;
         private final BlockPos origin;
         private final String name;
-        private double forwardVelocity;
-        private double verticalVelocity;
-        private double lateralVelocity;
-        private double forwardAccumulator;
-        private double verticalAccumulator;
-        private double lateralAccumulator;
+        private double forwardVelocity; // legacy persisted field
+        private double verticalVelocity; // legacy persisted field
+        private double lateralVelocity; // legacy persisted field
+        private double forwardAccumulator; // legacy persisted field
+        private double verticalAccumulator; // legacy persisted field
+        private double lateralAccumulator; // legacy persisted field
+        private double posX;
+        private double posY;
+        private double posZ;
+        private float yaw;
+        private float pitch;
+        private double speed;
+        private boolean detached;
+        private boolean detachedPower;
+        private UUID contraptionEntity;
         private long lastMoveTick;
         private transient byte[] hullCache;
         private transient Direction.Axis hullCacheAxis;
@@ -1066,6 +1326,9 @@ public final class NavigationWorldData extends SavedData {
             this.max = max;
             this.origin = origin;
             this.name = name;
+            this.posX = (min.getX() + max.getX() + 1.0D) * 0.5D;
+            this.posY = (min.getY() + max.getY() + 1.0D) * 0.5D;
+            this.posZ = (min.getZ() + max.getZ() + 1.0D) * 0.5D;
         }
 
         public UUID id() { return id; }
@@ -1074,13 +1337,25 @@ public final class NavigationWorldData extends SavedData {
         public BlockPos max() { return max; }
         public String name() { return name; }
         public BlockPos anchor() {
-            return new BlockPos((min.getX() + max.getX()) / 2, (min.getY() + max.getY()) / 2,
-                    (min.getZ() + max.getZ()) / 2);
+            return BlockPos.containing(posX, posY, posZ);
         }
+        public Vec3 anchorVec() { return new Vec3(posX, posY, posZ); }
+        public int sizeX() { return max.getX() - min.getX() + 1; }
+        public int sizeY() { return max.getY() - min.getY() + 1; }
+        public int sizeZ() { return max.getZ() - min.getZ() + 1; }
+        public float yaw() { return yaw; }
+        public float pitch() { return pitch; }
+        public double speed() { return speed; }
+        public boolean detached() { return detached; }
         public boolean contains(BlockPos pos) {
-            return pos.getX() >= min.getX() && pos.getX() <= max.getX()
+            if (!detached) return pos.getX() >= min.getX() && pos.getX() <= max.getX()
                     && pos.getY() >= min.getY() && pos.getY() <= max.getY()
                     && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
+            Vec3 local = SubmarineContraptionEntity.inverseRotate(
+                    Vec3.atCenterOf(pos).subtract(posX, posY, posZ), yaw, pitch);
+            double hx = sizeX() * 0.5D, hy = sizeY() * 0.5D, hz = sizeZ() * 0.5D;
+            return local.x >= -hx && local.x <= hx && local.y >= -hy && local.y <= hy
+                    && local.z >= -hz && local.z <= hz;
         }
 
         CompoundTag toTag() {
@@ -1097,6 +1372,15 @@ public final class NavigationWorldData extends SavedData {
             tag.putDouble("ForwardAccumulator", forwardAccumulator);
             tag.putDouble("VerticalAccumulator", verticalAccumulator);
             tag.putDouble("LateralAccumulator", lateralAccumulator);
+            tag.putDouble("PosX", posX);
+            tag.putDouble("PosY", posY);
+            tag.putDouble("PosZ", posZ);
+            tag.putFloat("Yaw", yaw);
+            tag.putFloat("Pitch", pitch);
+            tag.putDouble("Speed", speed);
+            tag.putBoolean("Detached", detached);
+            tag.putBoolean("DetachedPower", detachedPower);
+            if (contraptionEntity != null) tag.putUUID("ContraptionEntity", contraptionEntity);
             tag.putLong("LastMoveTick", lastMoveTick);
             return tag;
         }
@@ -1114,6 +1398,17 @@ public final class NavigationWorldData extends SavedData {
             vessel.forwardAccumulator = tag.getDouble("ForwardAccumulator");
             vessel.verticalAccumulator = tag.getDouble("VerticalAccumulator");
             vessel.lateralAccumulator = tag.getDouble("LateralAccumulator");
+            if (tag.contains("PosX")) {
+                vessel.posX = tag.getDouble("PosX");
+                vessel.posY = tag.getDouble("PosY");
+                vessel.posZ = tag.getDouble("PosZ");
+            }
+            vessel.yaw = tag.getFloat("Yaw");
+            vessel.pitch = tag.getFloat("Pitch");
+            vessel.speed = tag.contains("Speed") ? tag.getDouble("Speed") : Math.abs(vessel.forwardVelocity);
+            vessel.detached = tag.getBoolean("Detached");
+            vessel.detachedPower = tag.getBoolean("DetachedPower");
+            if (tag.hasUUID("ContraptionEntity")) vessel.contraptionEntity = tag.getUUID("ContraptionEntity");
             vessel.lastMoveTick = tag.getLong("LastMoveTick");
             return vessel;
         }

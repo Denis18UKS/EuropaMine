@@ -32,6 +32,12 @@ public final class NavigationTerminalScreen extends Screen {
     private static final int SONAR_CX = 912;
     private static final int SONAR_CY = 352;
     private static final int SONAR_RADIUS = 289;
+    private static final int MANUAL_ARROW_RADIUS = 190;
+    private static final int PITCH_SLIDER_X1 = 1217;
+    private static final int PITCH_SLIDER_X2 = 1247;
+    private static final int PITCH_SLIDER_Y1 = 218;
+    private static final int PITCH_SLIDER_Y2 = 486;
+    private static final float MANUAL_MAX_PITCH = 70.0F;
     private static final int[] STATUS_ACTION_COLORS = {
             0xFF71849A, 0xFFE1C000, 0xFFE66A12, 0xFF819077, 0xFF8E6194, 0xFFB64D53
     };
@@ -47,6 +53,9 @@ public final class NavigationTerminalScreen extends Screen {
     private float displayedVertical;
     private boolean draggingZoom;
     private boolean draggingBeam;
+    private boolean draggingSteering;
+    private boolean draggingPitch;
+    private float manualBaseYaw;
     private int selectedStatusAction;
 
     private NavigationTerminalScreen(BlockPos terminalPos, CompoundTag state) {
@@ -294,12 +303,28 @@ public final class NavigationTerminalScreen extends Screen {
         renderTargets(g);
 
         if (!state.getBoolean("Autopilot")) {
-            float forward = state.getFloat("ManualForward");
-            float vertical = state.getFloat("ManualVertical");
-            int tx = SONAR_CX + Math.round(forward * 190.0F);
-            int ty = SONAR_CY - Math.round(vertical * 190.0F);
-            line(g, SONAR_CX, SONAR_CY, tx, ty, 0xBFC9D5D5, 3);
+            float yaw = state.getFloat("Yaw");
+            float targetYaw = state.getFloat("ManualTargetYaw");
+            float throttle = Mth.clamp(state.getFloat("ManualThrottle"), 0.0F, 1.0F);
+            float relative = Mth.wrapDegrees(targetYaw - yaw);
+            double angle = Math.toRadians(relative);
+            int tx = SONAR_CX + Math.round((float)Math.cos(angle) * throttle * MANUAL_ARROW_RADIUS);
+            int ty = SONAR_CY + Math.round((float)Math.sin(angle) * throttle * MANUAL_ARROW_RADIUS);
+            line(g, SONAR_CX, SONAR_CY, tx, ty, 0xE5C9D5D5, 3);
             fillCircle(g, tx, ty, 7, 0xFFD1D7D5);
+
+            // The arrow radius is the throttle and its polar angle is horizontal heading. A separate
+            // pitch rail supplies the second rotational degree of freedom needed by a real 3D hull.
+            g.fill(PITCH_SLIDER_X1 + 13, PITCH_SLIDER_Y1, PITCH_SLIDER_X1 + 17, PITCH_SLIDER_Y2, 0xFF6E817B);
+            drawScaledCenteredText(g, "НОС +", (PITCH_SLIDER_X1 + PITCH_SLIDER_X2) / 2, PITCH_SLIDER_Y1 - 17, 0.9F, 0xFFD9DDD8);
+            drawScaledCenteredText(g, "НОС -", (PITCH_SLIDER_X1 + PITCH_SLIDER_X2) / 2, PITCH_SLIDER_Y2 + 5, 0.9F, 0xFFD9DDD8);
+            float pitch = Mth.clamp(state.getFloat("ManualTargetPitch"), -MANUAL_MAX_PITCH, MANUAL_MAX_PITCH);
+            float pitchT = (MANUAL_MAX_PITCH - pitch) / (MANUAL_MAX_PITCH * 2.0F);
+            int knobY = Math.round(Mth.lerp(pitchT, PITCH_SLIDER_Y1, PITCH_SLIDER_Y2));
+            g.fill(PITCH_SLIDER_X1, knobY - 5, PITCH_SLIDER_X2, knobY + 6, 0xFFE4E5E0);
+            g.renderOutline(PITCH_SLIDER_X1, knobY - 5, PITCH_SLIDER_X2 - PITCH_SLIDER_X1, 11, 0xFF384843);
+            drawScaledCenteredText(g, String.format(Locale.ROOT, "%+.0f°", pitch),
+                    (PITCH_SLIDER_X1 + PITCH_SLIDER_X2) / 2, knobY - 19, 0.9F, 0xFFEADDA9);
         }
     }
 
@@ -373,7 +398,7 @@ public final class NavigationTerminalScreen extends Screen {
 
         String tip = autopilot
                 ? "АВТОПИЛОТ: ВКЛ.\nСохранение позиции. Выберите направление на экране."
-                : "РУЧНОЕ УПРАВЛЕНИЕ\nНажмите ЛКМ внутри сонарного экрана.";
+                : "РУЧНОЕ УПРАВЛЕНИЕ\nСтрелка: курс + скорость. Ползунок справа: тангаж.";
         g.fill(731, 704, 1090, 770, 0xD4080A08);
         drawCenteredMultiline(g, tip, 910, 716, 0xFFE8D99C);
     }
@@ -555,13 +580,20 @@ public final class NavigationTerminalScreen extends Screen {
             return true;
         }
 
+        if (!state.getBoolean("Autopilot") && inside(x, y, PITCH_SLIDER_X1 - 5, PITCH_SLIDER_Y1 - 8,
+                PITCH_SLIDER_X2 + 5, PITCH_SLIDER_Y2 + 8)) {
+            draggingPitch = true;
+            updateManualPitch(y);
+            return true;
+        }
+
         double dx = x - SONAR_CX;
         double dy = y - SONAR_CY;
         if (dx * dx + dy * dy <= (SONAR_RADIUS - 8.0D) * (SONAR_RADIUS - 8.0D)) {
             if (!state.getBoolean("Autopilot")) {
-                float forward = (float) Mth.clamp(dx / 190.0D, -1.0D, 1.0D);
-                float vertical = (float) Mth.clamp(-dy / 190.0D, -1.0D, 1.0D);
-                send("manual", forward, vertical);
+                draggingSteering = true;
+                manualBaseYaw = state.getFloat("Yaw");
+                updateManualSteering(x, y);
             } else if (state.getBoolean("Directional")) {
                 float angle = (float) Math.atan2(dy, dx);
                 send("beam", angle, 0.0F);
@@ -584,14 +616,13 @@ public final class NavigationTerminalScreen extends Screen {
             send("beam", (float) Math.atan2(y - SONAR_CY, x - SONAR_CX), 0.0F);
             return true;
         }
-        if (button == 0 && !state.getBoolean("Autopilot")) {
-            double dx = x - SONAR_CX;
-            double dy = y - SONAR_CY;
-            if (dx * dx + dy * dy <= SONAR_RADIUS * SONAR_RADIUS) {
-                send("manual", (float) Mth.clamp(dx / 190.0D, -1.0D, 1.0D),
-                        (float) Mth.clamp(-dy / 190.0D, -1.0D, 1.0D));
-                return true;
-            }
+        if (button == 0 && draggingPitch && !state.getBoolean("Autopilot")) {
+            updateManualPitch(y);
+            return true;
+        }
+        if (button == 0 && draggingSteering && !state.getBoolean("Autopilot")) {
+            updateManualSteering(x, y);
+            return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
@@ -600,7 +631,31 @@ public final class NavigationTerminalScreen extends Screen {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         draggingZoom = false;
         draggingBeam = false;
+        draggingSteering = false;
+        draggingPitch = false;
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void updateManualSteering(double logicalX, double logicalY) {
+        double dx = logicalX - SONAR_CX;
+        double dy = logicalY - SONAR_CY;
+        double distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > MANUAL_ARROW_RADIUS) {
+            double scale = MANUAL_ARROW_RADIUS / distance;
+            dx *= scale;
+            dy *= scale;
+            distance = MANUAL_ARROW_RADIUS;
+        }
+        float throttle = (float)Mth.clamp(distance / MANUAL_ARROW_RADIUS, 0.0D, 1.0D);
+        float relativeYaw = distance < 0.001D ? 0.0F : (float)Math.toDegrees(Math.atan2(dy, dx));
+        send("manual_heading", Mth.wrapDegrees(manualBaseYaw + relativeYaw), throttle);
+    }
+
+    private void updateManualPitch(double logicalY) {
+        double clamped = Mth.clamp(logicalY, PITCH_SLIDER_Y1, PITCH_SLIDER_Y2);
+        double t = (clamped - PITCH_SLIDER_Y1) / (PITCH_SLIDER_Y2 - PITCH_SLIDER_Y1);
+        float pitch = (float)Mth.lerp(t, MANUAL_MAX_PITCH, -MANUAL_MAX_PITCH);
+        send("manual_pitch", pitch, 0.0F);
     }
 
     private void updateZoom(double logicalX) {

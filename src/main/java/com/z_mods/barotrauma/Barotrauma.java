@@ -5,12 +5,14 @@ import com.z_mods.barotrauma.init.ModBlocks;
 import com.z_mods.barotrauma.init.ModBlockGroup;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModBlockEntities;
+import com.z_mods.barotrauma.init.ModEntities;
 import com.z_mods.barotrauma.init.ModMenus;
 import com.z_mods.barotrauma.blocks.StructureConfigBlockRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import com.z_mods.barotrauma.client.SettingsPanelRenderer;
 import com.z_mods.barotrauma.client.HotbarLayoutPanelRenderer;
+import com.z_mods.barotrauma.client.SubmarineContraptionRenderer;
 import com.z_mods.barotrauma.client.VentScreen;
 import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
@@ -23,6 +25,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.gui.screens.MenuScreens;
 import org.slf4j.Logger;
 import software.bernie.geckolib.GeckoLib;
@@ -41,6 +44,7 @@ public class Barotrauma {
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlockGroup.CREATIVE_MODE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
+        ModEntities.ENTITY_TYPES.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
 
         ModNetworking.register();
@@ -121,6 +125,11 @@ public class Barotrauma {
                 BlockEntityRenderers.register(
                     ModBlockEntities.HOTBAR_LAYOUT_PANEL.get(),
                     HotbarLayoutPanelRenderer::new
+                );
+
+                EntityRenderers.register(
+                    ModEntities.SUBMARINE_CONTRAPTION.get(),
+                    SubmarineContraptionRenderer::new
                 );
             });
         }

@@ -97,20 +97,21 @@ public final class NavigationPackets {
         }
     }
 
-    public static void sendVesselMotion(ServerPlayer player, Vec3 delta) {
+    public static void sendVesselMotion(ServerPlayer player, Vec3 delta, float yawDelta) {
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ClientboundVesselMotion(delta.x, delta.y, delta.z));
+                new ClientboundVesselMotion(delta.x, delta.y, delta.z, yawDelta));
     }
 
-    public record ClientboundVesselMotion(double x, double y, double z) {
+    public record ClientboundVesselMotion(double x, double y, double z, float yawDelta) {
         static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {
             buffer.writeDouble(packet.x);
             buffer.writeDouble(packet.y);
             buffer.writeDouble(packet.z);
+            buffer.writeFloat(packet.yawDelta);
         }
 
         static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {
-            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble());
+            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(), buffer.readFloat());
         }
 
         static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {
@@ -120,6 +121,8 @@ public final class NavigationPackets {
                 minecraft.player.setPos(minecraft.player.getX() + packet.x,
                         minecraft.player.getY() + packet.y,
                         minecraft.player.getZ() + packet.z);
+                minecraft.player.setYRot(minecraft.player.getYRot() + packet.yawDelta);
+                minecraft.player.yHeadRot += packet.yawDelta;
                 minecraft.player.fallDistance = 0.0F;
             }));
             context.get().setPacketHandled(true);
@@ -157,7 +160,8 @@ public final class NavigationPackets {
         BlockPos terminalPos = data.resolveTerminalPos(packet.terminalPos);
         if (player.distanceToSqr(terminalPos.getX() + 0.5D, terminalPos.getY() + 0.5D, terminalPos.getZ() + 0.5D) > 400.0D
                 && !player.isCreative()) return;
-        if (!NavigationWorldData.NAVIGATION_GUI.equals(PowerWorldData.get(level).guiAt(terminalPos))) return;
+        if (!NavigationWorldData.NAVIGATION_GUI.equals(PowerWorldData.get(level).guiAt(terminalPos))
+                && !data.isVirtualNavigationTerminal(terminalPos)) return;
 
         NavigationWorldData.TerminalState terminal = data.terminalOrCreate(terminalPos);
         switch (packet.action) {
@@ -172,6 +176,8 @@ public final class NavigationPackets {
                 NavigationWorldData.VesselState vessel = data.vessel(terminal.vesselId());
                 if (terminal.autopilot() && terminal.selectedDestination() == 0 && vessel != null) {
                     terminal.setMaintainPos(vessel.anchor());
+                } else if (!terminal.autopilot() && vessel != null) {
+                    terminal.initialiseManual(vessel.yaw(), vessel.pitch());
                 }
             }
             case "zoom" -> terminal.setZoom(packet.value);
@@ -181,6 +187,8 @@ public final class NavigationPackets {
                 if (packet.value == 0 && vessel != null) terminal.setMaintainPos(vessel.anchor());
             }
             case "manual" -> terminal.setManual(packet.x, packet.y);
+            case "manual_heading" -> terminal.setManualHeading(packet.x, packet.y);
+            case "manual_pitch" -> terminal.setManualPitch(packet.x);
             case "beam" -> terminal.setBeamAngle(packet.x);
             case "template" -> terminal.toggleTemplate();
             case "section_action" -> terminal.setSectionAction(Math.round(packet.x), Math.round(packet.y), packet.value);

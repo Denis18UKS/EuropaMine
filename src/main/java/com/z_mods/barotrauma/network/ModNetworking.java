@@ -6,7 +6,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
-    private static final String PROTOCOL_VERSION = "8";
+    private static final String PROTOCOL_VERSION = "15";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(Barotrauma.MOD_ID, "main"),
@@ -70,5 +70,10 @@ public final class ModNetworking {
 
         PowerPackets.register(CHANNEL, () -> packetId++);
         NavigationPackets.register(CHANNEL, () -> packetId++);
+        HotbarPackets.register(CHANNEL, () -> packetId++);
+        SlotBindingPackets.register(CHANNEL, () -> packetId++);
+        BlueprintPackets.register(CHANNEL, () -> packetId++);
+        UtilityPackets.register(CHANNEL, () -> packetId++);
+        ProfessionPackets.register(CHANNEL, () -> packetId++);
     }
 }

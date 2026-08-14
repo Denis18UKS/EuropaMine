@@ -9,6 +9,7 @@
   "block.barotrauma.submarine_lever": "Submarine Lever",
   "block.barotrauma.submarine_trapdoor": "Submarine Trapdoor",
   "block.barotrauma.settings_panel": "Server Settings Panel",
+  "block.barotrauma.hotbar_layout_panel": "Hotbar Slot Layout Panel",
   "item.barotrauma.nametag": "Access Nametag",
   "item.barotrauma.access_configurator": "Access Configurator",
   "item.barotrauma.slot_lock_tool": "Slot Lock Tool",
@@ -52,5 +53,8 @@
   "item.barotrauma.navigation_linker": "Navigation Control Linker",
   "item.barotrauma.submarine_builder": "Multiblock Submarine Registrar",
   "gui.barotrauma.navigation_terminal": "Navigation Terminal",
-  "item.barotrauma.active_hand_sonar": "Active Handheld Sonar"
+  "item.barotrauma.active_hand_sonar": "Active Handheld Sonar",
+  "item.barotrauma.submarine_drawing_tool": "2D Submarine Builder",
+  "key.barotrauma.hotbar_10": "Select hotbar slot 10",
+  "item.barotrauma.slot_binding_configurator": "Slot Binding Configurator"
 }

@@ -20,6 +20,7 @@ public final class PanelNetworkSync {
         PanelSettings settings = PanelSettingsSavedData.get(player.server).getSettings();
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new PanelPackets.ClientboundOpenPanel(settings.toTag(), canEdit(player)));
+        ProfessionPackets.sync(player);
         syncChat(player);
         syncPhotos(player);
     }

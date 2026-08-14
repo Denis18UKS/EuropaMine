@@ -8,6 +8,8 @@ import com.z_mods.barotrauma.item.GuiBinderItem;
 import com.z_mods.barotrauma.item.NavigationLinkerItem;
 import com.z_mods.barotrauma.item.PanelCameraItem;
 import com.z_mods.barotrauma.item.SubmarineBuilderItem;
+import com.z_mods.barotrauma.item.SubmarineDrawingToolItem;
+import com.z_mods.barotrauma.item.SlotBindingConfiguratorItem;
 import com.z_mods.barotrauma.item.WireToolItem;
 import com.z_mods.barotrauma.power.PowerWorldData;
 import net.minecraft.world.item.ArmorMaterials;
@@ -37,6 +39,12 @@ public class ModItems {
 
     public static final RegistryObject<Item> ACTIVE_HAND_SONAR = ITEMS.register("active_hand_sonar",
             () -> new Item(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> SUBMARINE_DRAWING_TOOL = ITEMS.register("submarine_drawing_tool",
+            () -> new SubmarineDrawingToolItem(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> SLOT_BINDING_CONFIGURATOR = ITEMS.register("slot_binding_configurator",
+            () -> new SlotBindingConfiguratorItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> RED_WIRE_TOOL = ITEMS.register("red_wire_tool",
             () -> new WireToolItem(PowerWorldData.WireColor.RED, new Item.Properties().stacksTo(1)));

@@ -4,6 +4,7 @@ plugins {
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = mod_version
@@ -69,6 +70,7 @@ minecraft {
 
 // Добавляем репозиторий GeckoLib
 repositories {
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
     maven {
         name = 'GeckoLib'
         url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
@@ -86,6 +88,12 @@ dependencies {
     // Добавляем GeckoLib
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}")
     implementation("com.eliotlash.mclib:mclib:20")
+    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
+}
+
+mixin {
+    add sourceSets.main, 'barotrauma.refmap.json'
+    config 'barotrauma.mixins.json'
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -116,7 +124,8 @@ jar {
                 "Implementation-Title"    : project.name,
                 "Implementation-Version"  : project.jar.archiveVersion,
                 "Implementation-Vendor"   : mod_authors,
-                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConfigs": "barotrauma.mixins.json"
         ])
     }
 }

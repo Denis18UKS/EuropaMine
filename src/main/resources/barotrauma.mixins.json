@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.z_mods.barotrauma.mixin.impl",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "barotrauma.refmap.json",
+  "mixins": [
+    "InventoryExtraHotbarMixin",
+    "InventoryMenuExtraHotbarMixin",
+    "ServerGamePacketListenerHotbarMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

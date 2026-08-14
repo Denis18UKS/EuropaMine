@@ -5,11 +5,14 @@ import com.z_mods.barotrauma.init.ModBlocks;
 import com.z_mods.barotrauma.init.ModBlockGroup;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.init.ModBlockEntities;
+import com.z_mods.barotrauma.init.ModEntities;
 import com.z_mods.barotrauma.init.ModMenus;
 import com.z_mods.barotrauma.blocks.StructureConfigBlockRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoRenderer;
 import com.z_mods.barotrauma.blocks.VentDecoIntRenderer;
 import com.z_mods.barotrauma.client.SettingsPanelRenderer;
+import com.z_mods.barotrauma.client.HotbarLayoutPanelRenderer;
+import com.z_mods.barotrauma.client.SubmarineContraptionRenderer;
 import com.z_mods.barotrauma.client.VentScreen;
 import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
@@ -22,6 +25,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.gui.screens.MenuScreens;
 import org.slf4j.Logger;
 import software.bernie.geckolib.GeckoLib;
@@ -40,6 +44,7 @@ public class Barotrauma {
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlockGroup.CREATIVE_MODE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
+        ModEntities.ENTITY_TYPES.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
 
         ModNetworking.register();
@@ -54,6 +59,7 @@ public class Barotrauma {
             event.accept(ModBlocks.VENT_DECO_INT.get());
             event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
             event.accept(ModBlocks.SETTINGS_PANEL.get());
+            event.accept(ModBlocks.HOTBAR_LAYOUT_PANEL.get());
             event.accept(ModBlocks.BEDS.get());
             event.accept(ModBlocks.JUNCTION_BOX.get());
             event.accept(ModBlocks.SUBMARINE_BUTTON_BLOCK.get());
@@ -77,6 +83,8 @@ public class Barotrauma {
             event.accept(ModItems.NAVIGATION_LINKER.get());
             event.accept(ModItems.SUBMARINE_BUILDER.get());
             event.accept(ModItems.ACTIVE_HAND_SONAR.get());
+            event.accept(ModItems.SUBMARINE_DRAWING_TOOL.get());
+            event.accept(ModItems.SLOT_BINDING_CONFIGURATOR.get());
             event.accept(ModItems.RED_WIRE_TOOL.get());
             event.accept(ModItems.BLUE_WIRE_TOOL.get());
             event.accept(ModItems.REACTOR_FUEL_ROD.get());
@@ -112,6 +120,16 @@ public class Barotrauma {
                 BlockEntityRenderers.register(
                     ModBlockEntities.SETTINGS_PANEL.get(),
                     SettingsPanelRenderer::new
+                );
+
+                BlockEntityRenderers.register(
+                    ModBlockEntities.HOTBAR_LAYOUT_PANEL.get(),
+                    HotbarLayoutPanelRenderer::new
+                );
+
+                EntityRenderers.register(
+                    ModEntities.SUBMARINE_CONTRAPTION.get(),
+                    SubmarineContraptionRenderer::new
                 );
             });
         }

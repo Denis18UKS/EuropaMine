@@ -1,7 +1,8 @@
 package com.z_mods.barotrauma.network;
 
 import com.z_mods.barotrauma.client.NavigationTerminalScreen;
-import net.minecraft.client.Minecraft;
+import com.z_mods.barotrauma.entity.SubmarineContraptionEntity;
+import com.z_mods.barotrauma.mixin.ServerGamePacketListenerMotionAccess;
 import com.z_mods.barotrauma.navigation.NavigationSystem;
 import com.z_mods.barotrauma.navigation.NavigationWorldData;
 import com.z_mods.barotrauma.power.PowerWorldData;
@@ -13,6 +14,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
@@ -35,9 +37,9 @@ public final class NavigationPackets {
         channel.messageBuilder(ClientboundNavigationState.class, ids.getAsInt())
                 .encoder(ClientboundNavigationState::encode).decoder(ClientboundNavigationState::decode)
                 .consumerMainThread(ClientboundNavigationState::handle).add();
-        channel.messageBuilder(ClientboundVesselMotion.class, ids.getAsInt())
-                .encoder(ClientboundVesselMotion::encode).decoder(ClientboundVesselMotion::decode)
-                .consumerMainThread(ClientboundVesselMotion::handle).add();
+        channel.messageBuilder(ServerboundSubmarinePlayerMotion.class, ids.getAsInt())
+                .encoder(ServerboundSubmarinePlayerMotion::encode).decoder(ServerboundSubmarinePlayerMotion::decode)
+                .consumerMainThread(ServerboundSubmarinePlayerMotion::handle).add();
         channel.messageBuilder(ServerboundNavigationAction.class, ids.getAsInt())
                 .encoder(ServerboundNavigationAction::encode).decoder(ServerboundNavigationAction::decode)
                 .consumerMainThread(ServerboundNavigationAction::handle).add();
@@ -97,31 +99,45 @@ public final class NavigationPackets {
         }
     }
 
-    public static void sendVesselMotion(ServerPlayer player, Vec3 delta) {
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ClientboundVesselMotion(delta.x, delta.y, delta.z));
-    }
-
-    public record ClientboundVesselMotion(double x, double y, double z) {
-        static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {
-            buffer.writeDouble(packet.x);
-            buffer.writeDouble(packet.y);
-            buffer.writeDouble(packet.z);
+    /**
+     * Client-owned motion while standing inside/on a moving submarine. This follows the same
+     * split used by Create contraption collision: the local client resolves its moving-frame
+     * displacement, while the server mirrors velocity/on-ground state and validates proximity.
+     */
+    public record ServerboundSubmarinePlayerMotion(int contraptionId, float motionX, float motionY,
+                                                    float motionZ, boolean onGround) {
+        static void encode(ServerboundSubmarinePlayerMotion packet, FriendlyByteBuf buffer) {
+            buffer.writeVarInt(packet.contraptionId);
+            buffer.writeFloat(packet.motionX);
+            buffer.writeFloat(packet.motionY);
+            buffer.writeFloat(packet.motionZ);
+            buffer.writeBoolean(packet.onGround);
         }
 
-        static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {
-            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble());
+        static ServerboundSubmarinePlayerMotion decode(FriendlyByteBuf buffer) {
+            return new ServerboundSubmarinePlayerMotion(buffer.readVarInt(), buffer.readFloat(),
+                    buffer.readFloat(), buffer.readFloat(), buffer.readBoolean());
         }
 
-        static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {
-            context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                Minecraft minecraft = Minecraft.getInstance();
-                if (minecraft.player == null) return;
-                minecraft.player.setPos(minecraft.player.getX() + packet.x,
-                        minecraft.player.getY() + packet.y,
-                        minecraft.player.getZ() + packet.z);
-                minecraft.player.fallDistance = 0.0F;
-            }));
+        static void handle(ServerboundSubmarinePlayerMotion packet, Supplier<NetworkEvent.Context> context) {
+            ServerPlayer player = context.get().getSender();
+            context.get().enqueueWork(() -> {
+                if (player == null || !(player.level() instanceof ServerLevel level)) return;
+                Entity entity = level.getEntity(packet.contraptionId);
+                if (!(entity instanceof SubmarineContraptionEntity ship) || !ship.isAlive()) return;
+                if (!ship.containsWorldPosition(player.position(), 3.5D)) return;
+                if (!Float.isFinite(packet.motionX) || !Float.isFinite(packet.motionY) || !Float.isFinite(packet.motionZ)) return;
+
+                Vec3 motion = new Vec3(packet.motionX, packet.motionY, packet.motionZ);
+                if (motion.lengthSqr() > 16.0D) return;
+                player.setDeltaMovement(motion);
+                player.setOnGround(packet.onGround);
+                if (packet.onGround) player.fallDistance = 0.0F;
+
+                if (player.connection instanceof ServerGamePacketListenerMotionAccess access) {
+                    access.barotrauma$resetSubmarineFloatingCounters();
+                }
+            });
             context.get().setPacketHandled(true);
         }
     }
@@ -157,7 +173,8 @@ public final class NavigationPackets {
         BlockPos terminalPos = data.resolveTerminalPos(packet.terminalPos);
         if (player.distanceToSqr(terminalPos.getX() + 0.5D, terminalPos.getY() + 0.5D, terminalPos.getZ() + 0.5D) > 400.0D
                 && !player.isCreative()) return;
-        if (!NavigationWorldData.NAVIGATION_GUI.equals(PowerWorldData.get(level).guiAt(terminalPos))) return;
+        if (!NavigationWorldData.NAVIGATION_GUI.equals(PowerWorldData.get(level).guiAt(terminalPos))
+                && !data.isVirtualNavigationTerminal(terminalPos)) return;
 
         NavigationWorldData.TerminalState terminal = data.terminalOrCreate(terminalPos);
         switch (packet.action) {
@@ -172,6 +189,8 @@ public final class NavigationPackets {
                 NavigationWorldData.VesselState vessel = data.vessel(terminal.vesselId());
                 if (terminal.autopilot() && terminal.selectedDestination() == 0 && vessel != null) {
                     terminal.setMaintainPos(vessel.anchor());
+                } else if (!terminal.autopilot() && vessel != null) {
+                    terminal.initialiseManual(vessel.yaw(), vessel.pitch());
                 }
             }
             case "zoom" -> terminal.setZoom(packet.value);
@@ -181,7 +200,11 @@ public final class NavigationPackets {
                 if (packet.value == 0 && vessel != null) terminal.setMaintainPos(vessel.anchor());
             }
             case "manual" -> terminal.setManual(packet.x, packet.y);
+            case "manual_heading" -> terminal.setManualHeading(packet.x, packet.y);
+            case "manual_pitch" -> terminal.setManualPitch(packet.x);
             case "beam" -> terminal.setBeamAngle(packet.x);
+            case "template" -> terminal.toggleTemplate();
+            case "section_action" -> terminal.setSectionAction(Math.round(packet.x), Math.round(packet.y), packet.value);
             case "shutdown_reactor" -> {
                 int count = NavigationSystem.shutdownReactors(level, terminalPos);
                 level.playSound(null, terminalPos, SoundEvents.LEVER_CLICK, SoundSource.BLOCKS, 0.8F, 0.55F);

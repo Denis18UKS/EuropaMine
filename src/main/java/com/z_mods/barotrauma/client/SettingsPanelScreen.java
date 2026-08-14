@@ -43,7 +43,6 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
     private boolean ready;
     private int profession = 5;
     private boolean professionPopup;
-    private boolean loadoutPopup;
     private boolean enlargedPhoto;
     private boolean respawnShuttlePopup;
     private int campaignWarningSubmarine = -1;
@@ -60,6 +59,10 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
 
     public void applyServerSettings(PanelSettings value) {
         this.settings = value.copy();
+    }
+
+    public void applyProfession(int profession) {
+        this.profession = Mth.clamp(profession, 0, PROFESSIONS.length - 1);
     }
 
     @Override
@@ -87,10 +90,7 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
             beginModal(graphics, 205);
             drawProfessionPopup(graphics, mx, my);
             endModal(graphics);
-        } else if (loadoutPopup) {
-            beginModal(graphics, 205);
-            drawLoadoutPopup(graphics, mx, my);
-            endModal(graphics);
+
         } else if (enlargedPhoto) {
             beginModal(graphics, 238);
             drawPhotoPopup(graphics, mx, my);
@@ -376,22 +376,6 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
         button(g, "Закрыть", 730, 420, 100, 24, true, inside(mx, my, 730, 420, 830, 444));
     }
 
-    private void drawLoadoutPopup(GuiGraphics g, double mx, double my) {
-        g.fill(0, 0, CANVAS_W, CANVAS_H, 0x88000000);
-        panel(g, 385, 130, 430, 150);
-        centered(g, "КОМПЛЕКТ #1 — " + PROFESSIONS[profession], 600, 145, TEXT);
-        String[] items = {"Броня", "Пояс", "Инструмент", "Оружие", "Медикаменты"};
-        for (int i = 0; i < items.length; i++) {
-            int x = 405 + i * 78;
-            g.fill(x, 174, x + 62, 236, 0xFF1A2321);
-            border(g, x, 174, 62, 62, BORDER);
-            centered(g, switch (i) { case 0 -> "◆"; case 1 -> "▱"; case 2 -> "⚒"; case 3 -> "†"; default -> "✚"; },
-                    x + 31, 198, i == 4 ? ACCENT : TEXT);
-            centered(g, items[i], x + 31, 245, MUTED);
-        }
-        button(g, "Закрыть", 700, 250, 100, 22, true, inside(mx, my, 700, 250, 800, 272));
-    }
-
     private void drawPhotoPopup(GuiGraphics g, double mx, double my) {
         panel(g, 250, 55, 700, 565);
         centered(g, settings.photoNames[settings.submarine], 600, 70, BRIGHT);
@@ -491,16 +475,12 @@ public final class SettingsPanelScreen extends AbstractPanelScreen {
                 int px = 525 + (i % 3) * 105, py = 235 + (i / 3) * 102;
                 if (inside(x, y, px, py, px + 82, py + 90)) {
                     profession = i;
+                    ModNetworking.CHANNEL.sendToServer(new com.z_mods.barotrauma.network.ProfessionPackets.ServerboundProfession(i));
                     professionPopup = false;
-                    loadoutPopup = true;
                     return true;
                 }
             }
             if (inside(x, y, 730, 420, 830, 444)) professionPopup = false;
-            return true;
-        }
-        if (loadoutPopup) {
-            if (inside(x, y, 700, 250, 800, 272) || !inside(x, y, 385, 130, 815, 280)) loadoutPopup = false;
             return true;
         }
         double rawY = y;

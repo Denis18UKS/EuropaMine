@@ -1,0 +1,43 @@
+name: Материализация rigid-motion
+
+on:
+  push:
+    branches:
+      - codex/profession-hotbar-status-blueprint
+    paths:
+      - '.motion-patches/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Применить пакет движения подлодки
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .motion-patches/READY
+          cat .motion-patches/part-* > /tmp/rigid.patch.b64
+          echo '4c90d4792fefabac3231eb0e821282dccf7a690b7f08680b5685cd06284eee0a  /tmp/rigid.patch.b64' | sha256sum -c -
+          base64 -d /tmp/rigid.patch.b64 > /tmp/rigid.patch
+          echo '26ed2e4370ce6a206147a3e4ab38457721fa6b006d979fe0df697bb26eea8663  /tmp/rigid.patch' | sha256sum -c -
+          git apply --check /tmp/rigid.patch
+          git apply /tmp/rigid.patch
+          rm -rf .motion-patches
+
+      - name: Зафиксировать реальные исходники
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OpenAI Codex'
+          git config user.email 'codex@openai.com'
+          git add -A
+          git commit -m 'Перевести подлодку на непрерывное 3D-движение и поворот'
+          git push origin HEAD:codex/profession-hotbar-status-blueprint

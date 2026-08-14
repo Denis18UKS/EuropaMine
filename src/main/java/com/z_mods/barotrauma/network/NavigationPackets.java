@@ -1,7 +1,8 @@
 package com.z_mods.barotrauma.network;
 
 import com.z_mods.barotrauma.client.NavigationTerminalScreen;
-import net.minecraft.client.Minecraft;
+import com.z_mods.barotrauma.entity.SubmarineContraptionEntity;
+import com.z_mods.barotrauma.mixin.ServerGamePacketListenerMotionAccess;
 import com.z_mods.barotrauma.navigation.NavigationSystem;
 import com.z_mods.barotrauma.navigation.NavigationWorldData;
 import com.z_mods.barotrauma.power.PowerWorldData;
@@ -13,6 +14,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
@@ -35,9 +37,9 @@ public final class NavigationPackets {
         channel.messageBuilder(ClientboundNavigationState.class, ids.getAsInt())
                 .encoder(ClientboundNavigationState::encode).decoder(ClientboundNavigationState::decode)
                 .consumerMainThread(ClientboundNavigationState::handle).add();
-        channel.messageBuilder(ClientboundVesselMotion.class, ids.getAsInt())
-                .encoder(ClientboundVesselMotion::encode).decoder(ClientboundVesselMotion::decode)
-                .consumerMainThread(ClientboundVesselMotion::handle).add();
+        channel.messageBuilder(ServerboundSubmarinePlayerMotion.class, ids.getAsInt())
+                .encoder(ServerboundSubmarinePlayerMotion::encode).decoder(ServerboundSubmarinePlayerMotion::decode)
+                .consumerMainThread(ServerboundSubmarinePlayerMotion::handle).add();
         channel.messageBuilder(ServerboundNavigationAction.class, ids.getAsInt())
                 .encoder(ServerboundNavigationAction::encode).decoder(ServerboundNavigationAction::decode)
                 .consumerMainThread(ServerboundNavigationAction::handle).add();
@@ -97,38 +99,45 @@ public final class NavigationPackets {
         }
     }
 
-    public static void sendVesselMotion(ServerPlayer player, Vec3 delta, float viewYaw, float viewPitch) {
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ClientboundVesselMotion(delta.x, delta.y, delta.z, viewYaw, viewPitch));
-    }
-
-    public record ClientboundVesselMotion(double x, double y, double z, float viewYaw, float viewPitch) {
-        static void encode(ClientboundVesselMotion packet, FriendlyByteBuf buffer) {
-            buffer.writeDouble(packet.x);
-            buffer.writeDouble(packet.y);
-            buffer.writeDouble(packet.z);
-            buffer.writeFloat(packet.viewYaw);
-            buffer.writeFloat(packet.viewPitch);
+    /**
+     * Client-owned motion while standing inside/on a moving submarine. This follows the same
+     * split used by Create contraption collision: the local client resolves its moving-frame
+     * displacement, while the server mirrors velocity/on-ground state and validates proximity.
+     */
+    public record ServerboundSubmarinePlayerMotion(int contraptionId, float motionX, float motionY,
+                                                    float motionZ, boolean onGround) {
+        static void encode(ServerboundSubmarinePlayerMotion packet, FriendlyByteBuf buffer) {
+            buffer.writeVarInt(packet.contraptionId);
+            buffer.writeFloat(packet.motionX);
+            buffer.writeFloat(packet.motionY);
+            buffer.writeFloat(packet.motionZ);
+            buffer.writeBoolean(packet.onGround);
         }
 
-        static ClientboundVesselMotion decode(FriendlyByteBuf buffer) {
-            return new ClientboundVesselMotion(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),
-                    buffer.readFloat(), buffer.readFloat());
+        static ServerboundSubmarinePlayerMotion decode(FriendlyByteBuf buffer) {
+            return new ServerboundSubmarinePlayerMotion(buffer.readVarInt(), buffer.readFloat(),
+                    buffer.readFloat(), buffer.readFloat(), buffer.readBoolean());
         }
 
-        static void handle(ClientboundVesselMotion packet, Supplier<NetworkEvent.Context> context) {
-            context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                Minecraft minecraft = Minecraft.getInstance();
-                if (minecraft.player == null) return;
-                minecraft.player.setPos(minecraft.player.getX() + packet.x,
-                        minecraft.player.getY() + packet.y,
-                        minecraft.player.getZ() + packet.z);
-                minecraft.player.setYRot(packet.viewYaw);
-                minecraft.player.setXRot(packet.viewPitch);
-                minecraft.player.yHeadRot = packet.viewYaw;
-                minecraft.player.yBodyRot = packet.viewYaw;
-                minecraft.player.fallDistance = 0.0F;
-            }));
+        static void handle(ServerboundSubmarinePlayerMotion packet, Supplier<NetworkEvent.Context> context) {
+            ServerPlayer player = context.get().getSender();
+            context.get().enqueueWork(() -> {
+                if (player == null || !(player.level() instanceof ServerLevel level)) return;
+                Entity entity = level.getEntity(packet.contraptionId);
+                if (!(entity instanceof SubmarineContraptionEntity ship) || !ship.isAlive()) return;
+                if (!ship.containsWorldPosition(player.position(), 3.5D)) return;
+                if (!Float.isFinite(packet.motionX) || !Float.isFinite(packet.motionY) || !Float.isFinite(packet.motionZ)) return;
+
+                Vec3 motion = new Vec3(packet.motionX, packet.motionY, packet.motionZ);
+                if (motion.lengthSqr() > 16.0D) return;
+                player.setDeltaMovement(motion);
+                player.setOnGround(packet.onGround);
+                if (packet.onGround) player.fallDistance = 0.0F;
+
+                if (player.connection instanceof ServerGamePacketListenerMotionAccess access) {
+                    access.barotrauma$resetSubmarineFloatingCounters();
+                }
+            });
             context.get().setPacketHandled(true);
         }
     }

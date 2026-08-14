@@ -12,8 +12,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** Vanilla carried-item packets are only ever allowed to select slots 0..8. */
 @Mixin(ServerGamePacketListenerImpl.class)
-public abstract class ServerGamePacketListenerHotbarMixin {
+public abstract class ServerGamePacketListenerHotbarMixin implements ServerGamePacketListenerMotionAccess {
     @Shadow public ServerPlayer player;
+    @Shadow private int aboveGroundTickCount;
+    @Shadow private int aboveGroundVehicleTickCount;
+
+    @Override
+    public void barotrauma$resetSubmarineFloatingCounters() {
+        aboveGroundTickCount = 0;
+        aboveGroundVehicleTickCount = 0;
+    }
 
     @Inject(method = "handleSetCarriedItem", at = @At("HEAD"))
     private void barotrauma$clearVirtualSelection(ServerboundSetCarriedItemPacket packet, CallbackInfo ci) {

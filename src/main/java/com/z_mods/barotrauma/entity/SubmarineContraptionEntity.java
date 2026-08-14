@@ -9,6 +9,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
@@ -24,7 +25,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -41,6 +44,25 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
     private double pivotLocalX = 0.5D;
     private double pivotLocalY = 0.5D;
     private double pivotLocalZ = 0.5D;
+    private final Map<Long, List<Integer>> supportColumns = new HashMap<>();
+
+    // Client-side render pose interpolation. Simulated/Aeronautics keeps a logical physics pose
+    // separate from its interpolated render pose (via Sable SubLevels). Forge 1.20.1 does not have
+    // that API, so this carrier mirrors the same idea locally instead of accepting the base
+    // Entity's immediate position snaps from every tracking packet.
+    private int clientLerpSteps;
+    private double clientTargetX;
+    private double clientTargetY;
+    private double clientTargetZ;
+    private float clientTargetYaw;
+    private float clientTargetPitch;
+
+    private double clientFrameOldX;
+    private double clientFrameOldY;
+    private double clientFrameOldZ;
+    private float clientFrameOldYaw;
+    private float clientFrameOldPitch;
+    private boolean clientFrameValid;
 
     public SubmarineContraptionEntity(EntityType<? extends SubmarineContraptionEntity> type, Level level) {
         super(type, level);
@@ -72,6 +94,7 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
                     Block.BLOCK_STATE_REGISTRY.getId(state), blockEntityTag));
         }
         if (entity.blocks.isEmpty()) return null;
+        entity.rebuildSupportColumns();
 
         double centerX = min.getX() + entity.pivotLocalX;
         double centerY = min.getY() + entity.pivotLocalY;
@@ -108,20 +131,43 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
 
     /** Highest local block top directly under the supplied local feet position. */
     public double supportHeight(double localX, double localY, double localZ) {
+        double gridX = localX + pivotLocalX;
+        double gridZ = localZ + pivotLocalZ;
+        int baseX = Mth.floor(gridX);
+        int baseZ = Mth.floor(gridZ);
         double best = Double.NaN;
+
+        // The old implementation scanned every block of the ship for every player every tick.
+        // A large hull turns that into a visible client hitch. Index solid deck candidates by X/Z
+        // once, then inspect at most the neighbouring 3x3 columns here.
+        for (int x = baseX - 1; x <= baseX + 1; x++) {
+            for (int z = baseZ - 1; z <= baseZ + 1; z++) {
+                if (gridX < x - 0.30D || gridX > x + 1.30D
+                        || gridZ < z - 0.30D || gridZ > z + 1.30D) continue;
+                List<Integer> ys = supportColumns.get(columnKey(x, z));
+                if (ys == null) continue;
+                for (int y : ys) {
+                    double top = y - pivotLocalY + 1.0D;
+                    if (top > localY + 0.35D || top < localY - 1.25D) continue;
+                    if (Double.isNaN(best) || top > best) best = top;
+                }
+            }
+        }
+        return best;
+    }
+
+    private void rebuildSupportColumns() {
+        supportColumns.clear();
         for (BlockSnapshot snapshot : blocks) {
             BlockState state = snapshot.state();
             if (state.isAir() || !state.getFluidState().isEmpty()) continue;
-            double x0 = snapshot.x - pivotLocalX;
-            double y0 = snapshot.y - pivotLocalY;
-            double z0 = snapshot.z - pivotLocalZ;
-            if (localX < x0 - 0.30D || localX > x0 + 1.30D
-                    || localZ < z0 - 0.30D || localZ > z0 + 1.30D) continue;
-            double top = y0 + 1.0D;
-            if (top > localY + 0.35D || top < localY - 1.25D) continue;
-            if (Double.isNaN(best) || top > best) best = top;
+            supportColumns.computeIfAbsent(columnKey(snapshot.x, snapshot.z), ignored -> new ArrayList<>())
+                    .add(snapshot.y);
         }
-        return best;
+    }
+
+    private static long columnKey(int x, int z) {
+        return ((long)x << 32) ^ (z & 0xffffffffL);
     }
 
     /** Local (unrotated) hull bounds around the entity pivot. */
@@ -204,6 +250,7 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
         pivotLocalZ = tag.contains("PivotZ") ? tag.getDouble("PivotZ") : sizeZ * 0.5D;
         ListTag list = tag.getList("Blocks", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) blocks.add(BlockSnapshot.fromTag(list.getCompound(i)));
+        rebuildSupportColumns();
     }
 
     @Override
@@ -222,13 +269,88 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
 
     @Override
     public void tick() {
+        // Preserve one complete frame transform before moving towards the newest network pose.
+        // The renderer then interpolates old -> current with partialTick, while player carrying can
+        // use the exact per-client-tick frame delta.
         xOld = getX();
         yOld = getY();
         zOld = getZ();
         yRotO = getYRot();
         xRotO = getXRot();
+
+        clientFrameOldX = getX();
+        clientFrameOldY = getY();
+        clientFrameOldZ = getZ();
+        clientFrameOldYaw = getYRot();
+        clientFrameOldPitch = getXRot();
+        clientFrameValid = true;
+
+        if (level().isClientSide && clientLerpSteps > 0) {
+            double t = 1.0D / clientLerpSteps;
+            double x = Mth.lerp(t, getX(), clientTargetX);
+            double y = Mth.lerp(t, getY(), clientTargetY);
+            double z = Mth.lerp(t, getZ(), clientTargetZ);
+            float yaw = getYRot() + Mth.wrapDegrees(clientTargetYaw - getYRot()) * (float)t;
+            float pitch = Mth.lerp((float)t, getXRot(), clientTargetPitch);
+            setPos(x, y, z);
+            setYRot(yaw);
+            setXRot(pitch);
+            clientLerpSteps--;
+        }
+
         setDeltaMovement(Vec3.ZERO);
         setNoGravity(true);
+    }
+
+    @Override
+    public void lerpTo(double x, double y, double z, float yaw, float pitch, int steps, boolean teleport) {
+        if (!level().isClientSide) {
+            super.lerpTo(x, y, z, yaw, pitch, steps, teleport);
+            return;
+        }
+        clientTargetX = x;
+        clientTargetY = y;
+        clientTargetZ = z;
+        clientTargetYaw = yaw;
+        clientTargetPitch = pitch;
+        // Two client ticks are enough to hide packet cadence without making the hull noticeably
+        // trail its server position. New snapshots simply retarget the interpolation.
+        double distanceSqr = distanceToSqr(x, y, z);
+        clientLerpSteps = teleport && distanceSqr > 256.0D ? 1 : Math.max(2, Math.min(3, steps));
+    }
+
+    public boolean containsWorldPosition(Vec3 worldPosition, double inflate) {
+        Vec3 local = worldToLocal(worldPosition, getX(), getY(), getZ(), getYRot(), getXRot());
+        return localBounds().inflate(inflate).contains(local);
+    }
+
+    public boolean canCarryClient(Vec3 worldPosition) {
+        if (!clientFrameValid) return false;
+        Vec3 local = worldToLocal(worldPosition, clientFrameOldX, clientFrameOldY, clientFrameOldZ,
+                clientFrameOldYaw, clientFrameOldPitch);
+        return localBounds().inflate(1.15D, 1.75D, 1.15D).contains(local);
+    }
+
+    public Vec3 clientCarryDelta(Vec3 worldPosition) {
+        if (!clientFrameValid) return Vec3.ZERO;
+        Vec3 local = worldToLocal(worldPosition, clientFrameOldX, clientFrameOldY, clientFrameOldZ,
+                clientFrameOldYaw, clientFrameOldPitch);
+        Vec3 target = localToWorld(local, getX(), getY(), getZ(), getYRot(), getXRot());
+        return target.subtract(worldPosition);
+    }
+
+    /**
+     * Small local deck correction for the client prediction path. This is deliberately positional
+     * only: unlike the old implementation we never rotate the player's camera with the hull.
+     */
+    public Vec3 clientDeckCorrection(Vec3 worldPosition) {
+        if (!clientFrameValid) return Vec3.ZERO;
+        Vec3 local = worldToLocal(worldPosition, getX(), getY(), getZ(), getYRot(), getXRot());
+        double support = supportHeight(local.x, local.y, local.z);
+        if (Double.isNaN(support) || local.y >= support + 0.20D || local.y <= support - 0.70D) return Vec3.ZERO;
+        Vec3 targetLocal = new Vec3(local.x, support + 0.002D, local.z);
+        Vec3 target = localToWorld(targetLocal, getX(), getY(), getZ(), getYRot(), getXRot());
+        return target.subtract(worldPosition);
     }
 
     @Override
@@ -288,6 +410,7 @@ public final class SubmarineContraptionEntity extends Entity implements IEntityA
             CompoundTag be = buffer.readBoolean() ? buffer.readNbt() : null;
             blocks.add(new BlockSnapshot(x, y, z, state, be));
         }
+        rebuildSupportColumns();
     }
 
     public record BlockSnapshot(int x, int y, int z, int stateId, @Nullable CompoundTag blockEntityTag) {

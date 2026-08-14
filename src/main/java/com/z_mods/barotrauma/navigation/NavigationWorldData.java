@@ -19,6 +19,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -50,11 +51,21 @@ public final class NavigationWorldData extends SavedData {
     private static final int TEMPLATE_COLUMNS = 48;
     private static final int TEMPLATE_ROWS = 18;
     private static final double MAX_FORWARD_SPEED = 0.18D;
-    private static final double SPEED_ACCELERATION = 0.0065D;
-    private static final double SPEED_BRAKE = 0.010D;
+    private static final double SPEED_ACCELERATION = 0.0075D;
+    private static final double SPEED_BRAKE = 0.012D;
     private static final float MAX_PITCH = 70.0F;
-    private static final float BASE_YAW_RATE = 3.2F;
-    private static final float BASE_PITCH_RATE = 2.1F;
+    private static final float BASE_YAW_RATE = 3.0F;
+    private static final float BASE_PITCH_RATE = 2.35F;
+    private static final float BASE_YAW_ACCELERATION = 0.24F;
+    private static final float BASE_PITCH_ACCELERATION = 0.20F;
+    // Aeronautics/Sable lets inertia naturally limit angular surface speed. Our 1.20.1
+    // implementation has no Sable rigid body, so cap angular velocity by hull radius instead.
+    // This is especially important for long submarines: a tiny angular step at the pivot can
+    // otherwise move a player at the bow several blocks in one tick.
+    private static final double MAX_ROTATIONAL_SURFACE_SPEED = 0.16D;
+    private static final float YAW_STIFFNESS = 0.040F;
+    private static final float PITCH_STIFFNESS = 0.045F;
+    private static final float ANGULAR_DAMPING = 0.31F;
     private static final double MANUAL_DEADZONE = 0.035D;
     private static final int AUTOPILOT_LOOKAHEAD = 7;
     private static final TagKey<EntityType<?>> SONAR_HOSTILE = TagKey.create(Registries.ENTITY_TYPE,
@@ -185,26 +196,62 @@ public final class NavigationWorldData extends SavedData {
                 continue;
             }
 
-            float sizePenalty = Math.max(0.30F, 1.0F - Math.max(vessel.sizeX(), vessel.sizeZ()) / 96.0F);
-            float maxYawStep = BASE_YAW_RATE * sizePenalty;
-            float maxPitchStep = BASE_PITCH_RATE * sizePenalty;
-            float nextYaw = approachAngle(vessel.yaw, command.yaw, maxYawStep);
-            float nextPitch = approachLinear(vessel.pitch, Mth.clamp(command.pitch, -MAX_PITCH, MAX_PITCH), maxPitchStep);
-            double acceleration = targetSpeed < vessel.speed ? SPEED_BRAKE : SPEED_ACCELERATION;
-            double nextSpeed = approachLinear(vessel.speed, targetSpeed, acceleration);
+            // Simulated/Aeronautics does not directly overwrite a sub-level pose from controls.
+            // Controls create forces/torques on a rigid body. Reproduce that behavior here with a
+            // small critically-damped controller: angular velocity is integrated first, then the
+            // linear velocity chases the hull's *current* forward direction. This removes the old
+            // set-angle/set-position cadence that was visible as a periodic jerk.
+            double yawRadius = Math.max(1.0D, Math.hypot(vessel.sizeX(), vessel.sizeZ()) * 0.5D);
+            double pitchRadius = Math.max(1.0D, Math.hypot(vessel.sizeX(), vessel.sizeY()) * 0.5D);
+            float maxYawRate = angularRateLimit(BASE_YAW_RATE, yawRadius);
+            float maxPitchRate = angularRateLimit(BASE_PITCH_RATE, pitchRadius);
+            float yawError = powered ? angleDifference(vessel.yaw, command.yaw) : 0.0F;
+            float pitchTarget = powered ? Mth.clamp(command.pitch, -MAX_PITCH, MAX_PITCH) : vessel.pitch;
+            float pitchError = pitchTarget - vessel.pitch;
 
+            float yawAccelLimit = Math.min(BASE_YAW_ACCELERATION, Math.max(0.025F, maxYawRate * 0.20F));
+            float pitchAccelLimit = Math.min(BASE_PITCH_ACCELERATION, Math.max(0.020F, maxPitchRate * 0.20F));
+            float yawAccel = Mth.clamp(yawError * YAW_STIFFNESS - vessel.yawVelocity * ANGULAR_DAMPING,
+                    -yawAccelLimit, yawAccelLimit);
+            float pitchAccel = Mth.clamp(pitchError * PITCH_STIFFNESS - vessel.pitchVelocity * ANGULAR_DAMPING,
+                    -pitchAccelLimit, pitchAccelLimit);
+            vessel.yawVelocity = Mth.clamp(vessel.yawVelocity + yawAccel, -maxYawRate, maxYawRate);
+            vessel.pitchVelocity = Mth.clamp(vessel.pitchVelocity + pitchAccel, -maxPitchRate, maxPitchRate);
+
+            if (Math.abs(yawError) < 0.08F && Math.abs(vessel.yawVelocity) < 0.08F) vessel.yawVelocity = 0.0F;
+            if (Math.abs(pitchError) < 0.08F && Math.abs(vessel.pitchVelocity) < 0.08F) vessel.pitchVelocity = 0.0F;
+
+            float nextYaw = wrapDegrees(vessel.yaw + vessel.yawVelocity);
+            float nextPitch = Mth.clamp(vessel.pitch + vessel.pitchVelocity, -MAX_PITCH, MAX_PITCH);
+            if (nextPitch <= -MAX_PITCH + 0.001F || nextPitch >= MAX_PITCH - 0.001F) {
+                vessel.pitchVelocity *= 0.35F;
+            }
+
+            Vec3 currentVelocity = new Vec3(vessel.velocityX, vessel.velocityY, vessel.velocityZ);
             Vec3 forward = SubmarineContraptionEntity.forward(nextYaw, nextPitch);
-            Vec3 motion = forward.scale(nextSpeed);
-            double nextX = vessel.posX + motion.x;
-            double nextY = vessel.posY + motion.y;
-            double nextZ = vessel.posZ + motion.z;
+            Vec3 desiredVelocity = forward.scale(targetSpeed);
+            Vec3 velocityError = desiredVelocity.subtract(currentVelocity);
+            double acceleration = desiredVelocity.lengthSqr() < currentVelocity.lengthSqr()
+                    ? SPEED_BRAKE : SPEED_ACCELERATION;
+            if (velocityError.lengthSqr() > acceleration * acceleration) {
+                velocityError = velocityError.normalize().scale(acceleration);
+            }
+            Vec3 nextVelocity = currentVelocity.add(velocityError);
+            if (targetSpeed <= MANUAL_DEADZONE && nextVelocity.lengthSqr() < 1.0E-5D) nextVelocity = Vec3.ZERO;
 
-            // Rotation can make the bow/stern sweep into an obstacle even with almost no linear
-            // movement, therefore collision is checked against the complete future transform.
+            double nextX = vessel.posX + nextVelocity.x;
+            double nextY = vessel.posY + nextVelocity.y;
+            double nextZ = vessel.posZ + nextVelocity.z;
+
+            // Rotation can make bow/stern sweep into an obstacle even with little translation.
             if (!isTransformClear(level, contraption, nextX, nextY, nextZ, nextYaw, nextPitch)) {
-                vessel.speed = Math.max(0.0D, vessel.speed - SPEED_BRAKE * 2.0D);
-                // Try rotating in place only when that rotation itself is safe. This lets the
-                // autopilot turn away from a wall instead of permanently locking the rudder.
+                vessel.velocityX *= 0.20D;
+                vessel.velocityY *= 0.20D;
+                vessel.velocityZ *= 0.20D;
+                vessel.speed = Math.sqrt(vessel.velocityX * vessel.velocityX
+                        + vessel.velocityY * vessel.velocityY + vessel.velocityZ * vessel.velocityZ);
+
+                // A rigid body may still rotate away from an obstacle if the swept pose is clear.
                 if (isTransformClear(level, contraption, vessel.posX, vessel.posY, vessel.posZ, nextYaw, nextPitch)) {
                     moveCarriedEntities(level, vessel, contraption, vessel.posX, vessel.posY, vessel.posZ,
                             vessel.yaw, vessel.pitch, vessel.posX, vessel.posY, vessel.posZ, nextYaw, nextPitch);
@@ -212,6 +259,9 @@ public final class NavigationWorldData extends SavedData {
                     vessel.pitch = nextPitch;
                     contraption.setYRot(nextYaw);
                     contraption.setXRot(nextPitch);
+                } else {
+                    vessel.yawVelocity *= 0.35F;
+                    vessel.pitchVelocity *= 0.35F;
                 }
                 continue;
             }
@@ -226,7 +276,10 @@ public final class NavigationWorldData extends SavedData {
             vessel.posZ = nextZ;
             vessel.yaw = nextYaw;
             vessel.pitch = nextPitch;
-            vessel.speed = nextSpeed;
+            vessel.velocityX = nextVelocity.x;
+            vessel.velocityY = nextVelocity.y;
+            vessel.velocityZ = nextVelocity.z;
+            vessel.speed = nextVelocity.length();
             vessel.lastMoveTick = ticks;
             contraption.setPos(nextX, nextY, nextZ);
             contraption.setYRot(nextYaw);
@@ -258,6 +311,11 @@ public final class NavigationWorldData extends SavedData {
 
     private static float angleDifference(float from, float to) {
         return Mth.wrapDegrees(to - from);
+    }
+
+    private static float angularRateLimit(float configuredRate, double radius) {
+        double bySurfaceSpeed = Math.toDegrees(MAX_ROTATIONAL_SURFACE_SPEED / Math.max(1.0D, radius));
+        return (float)Math.max(0.12D, Math.min(configuredRate, bySurfaceSpeed));
     }
 
     private static float wrapDegrees(float value) {
@@ -384,6 +442,11 @@ public final class NavigationWorldData extends SavedData {
         vessel.yaw = yawForDirection(initialFacing);
         vessel.pitch = 0.0F;
         vessel.speed = 0.0D;
+        vessel.velocityX = 0.0D;
+        vessel.velocityY = 0.0D;
+        vessel.velocityZ = 0.0D;
+        vessel.yawVelocity = 0.0F;
+        vessel.pitchVelocity = 0.0F;
         contraption.setYRot(vessel.yaw);
         contraption.setXRot(vessel.pitch);
         vessel.hullCache = null;
@@ -450,42 +513,42 @@ public final class NavigationWorldData extends SavedData {
                 && !(entity instanceof net.minecraft.world.entity.decoration.HangingEntity)
                 && !entity.isPassenger());
         for (Entity entity : carried) {
+            // Create's ContraptionCollider deliberately leaves the local player to the client and
+            // only mirrors its resulting motion to the server. Moving ServerPlayer here as well
+            // makes two independent simulations fight over the same position and causes rubberbanding.
+            if (entity instanceof ServerPlayer) continue;
+
             Vec3 local = contraption.worldToLocal(entity.position(), oldX, oldY, oldZ, oldYaw, oldPitch);
             if (!localBounds.contains(local)) continue;
 
-            // Keep feet attached to a deck when gravity would otherwise make the player fall through
-            // the virtualised hull. Walking/jumping still changes the local coordinates normally.
+            boolean supported = false;
             if (entity instanceof LivingEntity && entity.getDeltaMovement().y <= 0.0D) {
                 double support = contraption.supportHeight(local.x, local.y, local.z);
-                if (!Double.isNaN(support) && local.y < support + 0.20D && local.y > support - 0.65D) {
+                if (!Double.isNaN(support) && local.y < support + 0.20D && local.y > support - 0.70D) {
                     local = new Vec3(local.x, support + 0.002D, local.z);
-                    Vec3 velocity = entity.getDeltaMovement();
-                    entity.setDeltaMovement(velocity.x, Math.max(0.0D, velocity.y), velocity.z);
+                    supported = true;
                 }
             }
 
-            // Rotate the entity view through the same old -> local -> new hull transform.
-            // This keeps the camera stable relative to the submarine during combined yaw + pitch.
-            Vec3 oldLook = entity.getLookAngle();
-            Vec3 localLook = SubmarineContraptionEntity.inverseRotate(oldLook, oldYaw, oldPitch);
-            Vec3 newLook = SubmarineContraptionEntity.rotateLocal(localLook, newYaw, newPitch).normalize();
-            float viewYaw = (float)Math.toDegrees(Math.atan2(-newLook.x, newLook.z));
-            float viewPitch = (float)Math.toDegrees(Math.atan2(-newLook.y,
-                    Math.sqrt(newLook.x * newLook.x + newLook.z * newLook.z)));
-
             Vec3 target = contraption.localToWorld(local, newX, newY, newZ, newYaw, newPitch);
             Vec3 delta = target.subtract(entity.position());
-            entity.setPos(target.x, target.y, target.z);
-            entity.setYRot(viewYaw);
-            entity.setXRot(viewPitch);
-            entity.fallDistance = 0.0F;
-            if (entity instanceof LivingEntity living) {
-                living.setYHeadRot(viewYaw);
-                living.yBodyRot = viewYaw;
+            if (delta.lengthSqr() > 1.0E-10D) {
+                // Use Minecraft's normal movement/collision path instead of setPos/teleport. This is
+                // the important moving-reference-frame change: input remains additive and vanilla
+                // collision correction can participate instead of fighting an absolute teleport.
+                entity.move(MoverType.SELF, delta);
             }
-            if (entity instanceof ServerPlayer player) {
-                NavigationPackets.sendVesselMotion(player, delta, viewYaw, viewPitch);
+
+            if (supported) {
+                entity.setOnGround(true);
+                entity.fallDistance = 0.0F;
+                Vec3 velocity = entity.getDeltaMovement();
+                if (velocity.y < 0.0D) entity.setDeltaMovement(velocity.x, 0.0D, velocity.z);
             }
+
+            // Deliberately do NOT rotate player/entity look direction here. Sable keeps entities in
+            // the moving sub-level while their own camera/input orientation remains independent.
+            // The old absolute yaw/pitch correction was one of the sources of visible tug-of-war.
         }
     }
 
@@ -1318,6 +1381,11 @@ public final class NavigationWorldData extends SavedData {
         private float yaw;
         private float pitch;
         private double speed;
+        private double velocityX;
+        private double velocityY;
+        private double velocityZ;
+        private float yawVelocity;
+        private float pitchVelocity;
         private boolean detached;
         private boolean detachedPower;
         private UUID contraptionEntity;
@@ -1389,6 +1457,11 @@ public final class NavigationWorldData extends SavedData {
             tag.putFloat("Yaw", yaw);
             tag.putFloat("Pitch", pitch);
             tag.putDouble("Speed", speed);
+            tag.putDouble("VelocityX", velocityX);
+            tag.putDouble("VelocityY", velocityY);
+            tag.putDouble("VelocityZ", velocityZ);
+            tag.putFloat("YawVelocity", yawVelocity);
+            tag.putFloat("PitchVelocity", pitchVelocity);
             tag.putBoolean("Detached", detached);
             tag.putBoolean("DetachedPower", detachedPower);
             if (contraptionEntity != null) tag.putUUID("ContraptionEntity", contraptionEntity);
@@ -1417,6 +1490,18 @@ public final class NavigationWorldData extends SavedData {
             vessel.yaw = tag.getFloat("Yaw");
             vessel.pitch = tag.getFloat("Pitch");
             vessel.speed = tag.contains("Speed") ? tag.getDouble("Speed") : Math.abs(vessel.forwardVelocity);
+            if (tag.contains("VelocityX")) {
+                vessel.velocityX = tag.getDouble("VelocityX");
+                vessel.velocityY = tag.getDouble("VelocityY");
+                vessel.velocityZ = tag.getDouble("VelocityZ");
+            } else if (vessel.speed > 0.0D) {
+                Vec3 legacyForward = SubmarineContraptionEntity.forward(vessel.yaw, vessel.pitch);
+                vessel.velocityX = legacyForward.x * vessel.speed;
+                vessel.velocityY = legacyForward.y * vessel.speed;
+                vessel.velocityZ = legacyForward.z * vessel.speed;
+            }
+            vessel.yawVelocity = tag.getFloat("YawVelocity");
+            vessel.pitchVelocity = tag.getFloat("PitchVelocity");
             vessel.detached = tag.getBoolean("Detached");
             vessel.detachedPower = tag.getBoolean("DetachedPower");
             if (tag.hasUUID("ContraptionEntity")) vessel.contraptionEntity = tag.getUUID("ContraptionEntity");

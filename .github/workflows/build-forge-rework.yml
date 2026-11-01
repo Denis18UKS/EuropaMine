@@ -16,12 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
       - name: Apply round-2 rework patch
         shell: bash
         run: |
           set -euxo pipefail
-          base64 -d ci/round2.patch.gz.b64 | gzip -d > /tmp/europamine-round2.patch
+          cat ci/round2-chunks/part-* > /tmp/round2-full.b64
+          sha256sum -c ci/round2-chunks/EXPECTED.sha256
+          base64 -d /tmp/round2-full.b64 | gzip -d > /tmp/europamine-round2.patch
           git apply --check /tmp/europamine-round2.patch
           git apply /tmp/europamine-round2.patch
           git diff --check
@@ -56,6 +57,19 @@ jobs:
           test -f src/main/java/com/z_mods/barotrauma/client/PowerWorldVisualRenderer.java
           test -f src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java
           test -f src/main/resources/assets/barotrauma/shaders/core/world_fx.json
+
+      - name: Run pure behavior tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/europamine-logic-test
+          mkdir -p /tmp/europamine-logic-test
+          javac -d /tmp/europamine-logic-test \
+            src/main/java/com/z_mods/barotrauma/logic/HudLayoutMath.java \
+            src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java \
+            src/main/java/com/z_mods/barotrauma/logic/ToolSafetyLogic.java \
+            scripts/logic-tests/LogicBehaviorTest.java
+          java -cp /tmp/europamine-logic-test LogicBehaviorTest
 
       - name: Build Forge 1.20.1
         run: ./gradlew --no-daemon clean build --stacktrace
@@ -108,7 +122,7 @@ jobs:
           zip -qr EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip . \
             -x '.git/*' '.gradle/*' 'build/*' 'run/*' '.gui-assets/*' \
                'EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip' \
-               'EuropaMine-0.4.0-Forge-1.20.1-Rework.jar' 'ci/round2.patch.gz.b64'
+               'EuropaMine-0.4.0-Forge-1.20.1-Rework.jar' 'ci/*'
           sha256sum EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
           ls -lh EuropaMine-0.4.0-Forge-1.20.1-Rework.jar EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
 

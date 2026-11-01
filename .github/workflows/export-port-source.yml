@@ -1,0 +1,18 @@
+name: Export EuropaMine source for Fabric port
+on:
+  push:
+    branches: ["chatgpt/europamine-fabric-modern-20261101"]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack source snapshot
+        run: |
+          tar --exclude=.git --exclude=.gradle --exclude=build -czf /tmp/europamine-modern-source.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EuropaMine-modern-source
+          path: /tmp/europamine-modern-source.tar.gz

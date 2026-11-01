@@ -1,0 +1,58 @@
+diff --git a/scripts/logic-tests/LogicBehaviorTest.java b/scripts/logic-tests/LogicBehaviorTest.java
+index 85272bd..c9ce67f 100644
+--- a/scripts/logic-tests/LogicBehaviorTest.java
++++ b/scripts/logic-tests/LogicBehaviorTest.java
+@@ -13,6 +13,10 @@ public final class LogicBehaviorTest {
+         require(p.y() == 160, "HUD y must clamp to bottom edge");
+         var p2 = HudLayoutMath.resolve(-0.5, -1.0, 40, 30, 200, 100);
+         require(p2.x() == 0 && p2.y() == 0, "HUD must clamp to top-left");
++        require(HudLayoutMath.adaptiveSidePanelX(400, 112, 176, 64, 4) == 288,
++                "inventory extra panel should sit to the right when it fits");
++        require(HudLayoutMath.adaptiveSidePanelX(220, 22, 176, 64, 4) == 152,
++                "inventory extra panel must clamp inside a narrow screen");
+ 
+         var warm = ReactorSafetyLogic.tick(40, 90.0, 2, 30, false);
+         require(warm.overfuelTicks() > 30, "two rods must increase overfuel danger");
+diff --git a/src/main/java/com/z_mods/barotrauma/client/ExtraHotbarClientEvents.java b/src/main/java/com/z_mods/barotrauma/client/ExtraHotbarClientEvents.java
+index 3ff404c..0545121 100644
+--- a/src/main/java/com/z_mods/barotrauma/client/ExtraHotbarClientEvents.java
++++ b/src/main/java/com/z_mods/barotrauma/client/ExtraHotbarClientEvents.java
+@@ -162,11 +162,13 @@ public final class ExtraHotbarClientEvents {
+             GuiGraphics g = event.getGuiGraphics();
+             int left = (event.getScreen().width - 176) / 2, top = (event.getScreen().height - 166) / 2;
+             int count = ExtraHotbar.getClientAppliedCount();
+-            int panelX = left + 176, panelY = top + 4, panelW = 64, rows = (count + 2) / 3, panelH = 10 + rows * 18;
++            int panelW = 64;
++            int panelX = HudLayoutMath.adaptiveSidePanelX(event.getScreen().width, left, 176, panelW, 4);
++            int panelY = top + 4, rows = (count + 2) / 3, panelH = 10 + rows * 18;
+             g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xB0101514);
+             g.renderOutline(panelX, panelY, panelW, panelH, 0xAA65746F);
+             for (int i = 0; i < count; i++) {
+-                int col = i % 3, row = i / 3; int x = left + 180 + col * 18, y = top + 8 + row * 18;
++                int col = i % 3, row = i / 3; int x = panelX + 4 + col * 18, y = top + 8 + row * 18;
+                 g.fill(x - 1, y - 1, x + 17, y + 17, 0x18070B0A); g.renderOutline(x - 1, y - 1, 18, 18, 0x88717C78);
+                 ItemStack stack = ExtraHotbar.getStack(mc.player, i); if (!stack.isEmpty()) { g.renderItem(stack, x, y); g.renderItemDecorations(mc.font, stack, x, y); }
+                 g.drawString(mc.font, Integer.toString(10 + i), x + 1, y + 1, 0xFFE6E6E6, true);
+diff --git a/src/main/java/com/z_mods/barotrauma/logic/HudLayoutMath.java b/src/main/java/com/z_mods/barotrauma/logic/HudLayoutMath.java
+index 1e03dec..09ec227 100644
+--- a/src/main/java/com/z_mods/barotrauma/logic/HudLayoutMath.java
++++ b/src/main/java/com/z_mods/barotrauma/logic/HudLayoutMath.java
+@@ -18,6 +18,18 @@ public final class HudLayoutMath {
+         return Math.max(0.0D, Math.min(1.0D, coordinate / (double)span));
+     }
+ 
++    /** Places a companion panel beside an inventory when possible and never outside the screen. */
++    public static int adaptiveSidePanelX(int screenWidth, int inventoryLeft, int inventoryWidth,
++                                         int panelWidth, int margin) {
++        int safeMargin = Math.max(0, margin);
++        int maxX = Math.max(safeMargin, screenWidth - Math.max(0, panelWidth) - safeMargin);
++        int right = inventoryLeft + Math.max(0, inventoryWidth);
++        if (right + panelWidth <= screenWidth - safeMargin) return clamp(right, safeMargin, maxX);
++        int left = inventoryLeft - panelWidth;
++        if (left >= safeMargin) return clamp(left, safeMargin, maxX);
++        return maxX;
++    }
++
+     private static int clamp(int value, int min, int max) {
+         return Math.max(min, Math.min(max, value));
+     }

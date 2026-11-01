@@ -1,8 +1,7 @@
 package com.z_mods.barotrauma.network;
 
 import com.z_mods.barotrauma.Barotrauma;
-import com.z_mods.barotrauma.client.SettingsPanelScreen;
-import net.minecraft.client.Minecraft;
+import com.z_mods.barotrauma.client.NetworkClientScreenHandlers;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -44,9 +43,8 @@ public final class ProfessionPackets {
         static void encode(ClientboundProfession p, FriendlyByteBuf b) { b.writeVarInt(p.profession); }
         static ClientboundProfession decode(FriendlyByteBuf b) { return new ClientboundProfession(b.readVarInt()); }
         static void handle(ClientboundProfession p, Supplier<NetworkEvent.Context> c) {
-            c.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                if (Minecraft.getInstance().screen instanceof SettingsPanelScreen screen) screen.applyProfession(p.profession);
-            }));
+            c.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                    () -> () -> NetworkClientScreenHandlers.applyProfession(p.profession)));
             c.get().setPacketHandled(true);
         }
     }

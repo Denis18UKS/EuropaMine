@@ -1,11 +1,8 @@
 package com.z_mods.barotrauma.network;
 
-import com.z_mods.barotrauma.client.HotbarLayoutSettings;
+import com.z_mods.barotrauma.client.HotbarClientPacketHandlers;
 import com.z_mods.barotrauma.hotbar.ExtraHotbar;
-import com.z_mods.barotrauma.hotbar.ExtraHotbarStorage;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
@@ -60,12 +57,8 @@ public final class HotbarPackets {
         static void encode(ClientboundOpenHotbarLayout packet, FriendlyByteBuf buf) {}
         static ClientboundOpenHotbarLayout decode(FriendlyByteBuf buf) { return new ClientboundOpenHotbarLayout(); }
         static void handle(ClientboundOpenHotbarLayout packet, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                if (Minecraft.getInstance().player != null) {
-                    Minecraft.getInstance().player.displayClientMessage(Component.literal(
-                            "Настройка слотов выполняется прямо на настенной панели. Отдельный GUI больше не открывается."), true);
-                }
-            }));
+            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                    () -> HotbarClientPacketHandlers::showLayoutNotice));
             ctx.get().setPacketHandled(true);
         }
     }
@@ -80,7 +73,7 @@ public final class HotbarPackets {
         }
         static void handle(ClientboundHotbarPanelClick packet, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> HotbarLayoutSettings.handlePanelClick(packet.canvasX, packet.canvasY)));
+                    () -> () -> HotbarClientPacketHandlers.handlePanelClick(packet.canvasX, packet.canvasY)));
             ctx.get().setPacketHandled(true);
         }
     }
@@ -104,14 +97,8 @@ public final class HotbarPackets {
         }
 
         static void handle(ClientboundHotbarSync packet, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                ExtraHotbar.setClientAppliedCount(packet.count);
-                ExtraHotbar.setClientSelectedExtra(packet.selectedExtra);
-                if (Minecraft.getInstance().player == null) return;
-                ExtraHotbarStorage storage = ExtraHotbar.storage(Minecraft.getInstance().player);
-                if (storage == null) return;
-                for (int i = 0; i < ExtraHotbar.MAX_EXTRA; i++) storage.setStackInSlot(i, packet.stacks[i].copy());
-            }));
+            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                    () -> () -> HotbarClientPacketHandlers.applySync(packet.count, packet.selectedExtra, packet.stacks)));
             ctx.get().setPacketHandled(true);
         }
     }

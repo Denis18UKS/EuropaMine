@@ -3,7 +3,7 @@ name: Build EuropaMine Forge requested rework
 on:
   push:
     branches:
-      - forge-requested-rework-20261101
+      - forge-ui-submarine-rework-20261102
 
 permissions:
   contents: read
@@ -15,6 +15,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+
+      - name: Apply round-2 rework patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          base64 -d ci/round2.patch.gz.b64 | gzip -d > /tmp/europamine-round2.patch
+          git apply --check /tmp/europamine-round2.patch
+          git apply /tmp/europamine-round2.patch
+          git diff --check
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -42,6 +52,10 @@ jobs:
           test -f src/main/java/com/z_mods/barotrauma/client/RoundPresentationClient.java
           test -f src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
           test -f src/main/resources/assets/barotrauma/models/item/submarine_drawing_tool.json
+          test -f src/main/java/com/z_mods/barotrauma/client/HudOverlayEvents.java
+          test -f src/main/java/com/z_mods/barotrauma/client/PowerWorldVisualRenderer.java
+          test -f src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java
+          test -f src/main/resources/assets/barotrauma/shaders/core/world_fx.json
 
       - name: Build Forge 1.20.1
         run: ./gradlew --no-daemon clean build --stacktrace
@@ -62,8 +76,11 @@ jobs:
           unzip -l "$JAR" | grep -q 'assets/barotrauma/lang/ru_ru.json'
           unzip -l "$JAR" | grep -q 'assets/barotrauma/textures/gui/navigation_terminal_frame.png'
           unzip -l "$JAR" | grep -q 'assets/barotrauma/models/item/external_wall_zone_tool.json'
-          cp "$JAR" EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar
-          sha256sum EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/PowerWorldVisualRenderer.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/logic/ReactorSafetyLogic.class'
+          unzip -l "$JAR" | grep -q 'assets/barotrauma/shaders/core/world_fx.json'
+          cp "$JAR" EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
+          sha256sum EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
 
       - name: Smoke-test dedicated Forge server
         shell: bash
@@ -88,19 +105,19 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          zip -qr EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip . \
+          zip -qr EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip . \
             -x '.git/*' '.gradle/*' 'build/*' 'run/*' '.gui-assets/*' \
-               'EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip' \
-               'EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar'
-          sha256sum EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip
-          ls -lh EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip
+               'EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip' \
+               'EuropaMine-0.4.0-Forge-1.20.1-Rework.jar' 'ci/round2.patch.gz.b64'
+          sha256sum EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
+          ls -lh EuropaMine-0.4.0-Forge-1.20.1-Rework.jar EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
 
       - name: Upload final files
         uses: actions/upload-artifact@v4
         with:
-          name: EuropaMine-Forge-1.20.1-Requested-Rework
+          name: EuropaMine-Forge-1.20.1-Rework-v0.4.0
           if-no-files-found: error
           retention-days: 7
           path: |
-            EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar
-            EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip
+            EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
+            EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip

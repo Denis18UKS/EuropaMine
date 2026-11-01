@@ -25,6 +25,8 @@ jobs:
           base64 -d /tmp/round2-full.b64 | gzip -d > /tmp/europamine-round2.patch
           git apply --check /tmp/europamine-round2.patch
           git apply /tmp/europamine-round2.patch
+          git apply --check ci/fixes/recipe-book-1.patch
+          git apply ci/fixes/recipe-book-1.patch
           git diff --check
 
       - name: Set up Java 17

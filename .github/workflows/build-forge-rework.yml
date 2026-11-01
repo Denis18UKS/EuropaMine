@@ -29,6 +29,8 @@ jobs:
           git apply ci/fixes/recipe-book-1.patch
           git apply --check ci/fixes/compile-2.patch
           git apply ci/fixes/compile-2.patch
+          git apply --check ci/fixes/feature-gap-submarine-selector.patch
+          git apply ci/fixes/feature-gap-submarine-selector.patch
           git diff --check
 
       - name: Set up Java 17
@@ -60,6 +62,7 @@ jobs:
           test -f src/main/java/com/z_mods/barotrauma/client/HudOverlayEvents.java
           test -f src/main/java/com/z_mods/barotrauma/client/PowerWorldVisualRenderer.java
           test -f src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java
+          test -f src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java
           test -f src/main/resources/assets/barotrauma/shaders/core/world_fx.json
 
       - name: Run pure behavior tests
@@ -72,6 +75,7 @@ jobs:
             src/main/java/com/z_mods/barotrauma/logic/HudLayoutMath.java \
             src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java \
             src/main/java/com/z_mods/barotrauma/logic/ToolSafetyLogic.java \
+            src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java \
             scripts/logic-tests/LogicBehaviorTest.java
           java -cp /tmp/europamine-logic-test LogicBehaviorTest
 
@@ -96,6 +100,7 @@ jobs:
           unzip -l "$JAR" | grep -q 'assets/barotrauma/models/item/external_wall_zone_tool.json'
           unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/PowerWorldVisualRenderer.class'
           unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/logic/ReactorSafetyLogic.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/logic/SubmarineCommandLogic.class'
           unzip -l "$JAR" | grep -q 'assets/barotrauma/shaders/core/world_fx.json'
           cp "$JAR" EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
           sha256sum EuropaMine-0.4.0-Forge-1.20.1-Rework.jar

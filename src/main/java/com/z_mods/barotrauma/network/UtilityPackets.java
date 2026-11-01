@@ -1,9 +1,7 @@
 package com.z_mods.barotrauma.network;
 
-import com.z_mods.barotrauma.client.StructureKindScreen;
-import net.minecraft.client.Minecraft;
+import com.z_mods.barotrauma.client.NetworkClientScreenHandlers;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
@@ -29,7 +27,7 @@ public final class UtilityPackets {
         static ClientboundOpenStructureConfig decode(FriendlyByteBuf b) { return new ClientboundOpenStructureConfig(); }
         static void handle(ClientboundOpenStructureConfig p, Supplier<NetworkEvent.Context> c) {
             c.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> Minecraft.getInstance().setScreen(new StructureKindScreen(InteractionHand.MAIN_HAND))));
+                    () -> NetworkClientScreenHandlers::openStructureConfig));
             c.get().setPacketHandled(true);
         }
     }

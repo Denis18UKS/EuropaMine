@@ -1,8 +1,7 @@
 package com.z_mods.barotrauma.network;
 
-import com.z_mods.barotrauma.client.SubmarineBlueprintScreen;
+import com.z_mods.barotrauma.client.NetworkClientScreenHandlers;
 import com.z_mods.barotrauma.navigation.NavigationWorldData;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.FriendlyByteBuf;
@@ -41,7 +40,7 @@ public final class BlueprintPackets {
         static ClientboundOpenBlueprint decode(FriendlyByteBuf b) { return new ClientboundOpenBlueprint(); }
         static void handle(ClientboundOpenBlueprint p, Supplier<NetworkEvent.Context> c) {
             c.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> Minecraft.getInstance().setScreen(new SubmarineBlueprintScreen())));
+                    () -> NetworkClientScreenHandlers::openBlueprint));
             c.get().setPacketHandled(true);
         }
     }

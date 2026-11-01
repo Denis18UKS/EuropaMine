@@ -16,12 +16,12 @@ diff --git a/src/main/java/com/z_mods/barotrauma/client/PlayerProfileOverlay.jav
 --- a/src/main/java/com/z_mods/barotrauma/client/PlayerProfileOverlay.java
 +++ b/src/main/java/com/z_mods/barotrauma/client/PlayerProfileOverlay.java
 @@ -71,7 +71,8 @@ public final class PlayerProfileOverlay {
-         int x = anchor.x();
-         int y = anchor.y();
+     public static int getScaledPanelHeight() { return Math.round(PANEL_HEIGHT * HudSettings.getScale()); }
  
+     private static void drawPlayerHead(GuiGraphics guiGraphics, Minecraft minecraft, int x, int y) {
 -        if (minecraft.player instanceof AbstractClientPlayer player) {
 +        AbstractClientPlayer player = minecraft.player;
 +        if (player != null) {
              ResourceLocation skin = player.getSkinTextureLocation();
-             RenderSystem.setShaderTexture(0, skin);
-             graphics.blit(skin, x, y, 8, 8, 8, 8, 64, 64);
+             guiGraphics.blit(skin, x, y, 40, 40, 8.0F, 8.0F, 8, 8, 64, 64);
+             guiGraphics.blit(skin, x, y, 40, 40, 40.0F, 8.0F, 8, 8, 64, 64);

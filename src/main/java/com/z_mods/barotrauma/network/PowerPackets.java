@@ -1,6 +1,7 @@
 package com.z_mods.barotrauma.network;
 
 import com.z_mods.barotrauma.client.PowerScreens;
+import com.z_mods.barotrauma.client.ElectricalPanelRealScreen;
 import com.z_mods.barotrauma.init.ModItems;
 import com.z_mods.barotrauma.item.GuiBinderItem;
 import com.z_mods.barotrauma.power.PowerSystem;
@@ -57,7 +58,7 @@ public final class PowerPackets {
     public static void sendOpenMachine(ServerPlayer player, BlockPos pos, String guiId, boolean technical) {
         if (!(player.level() instanceof ServerLevel level)) return;
         PowerWorldData data = PowerWorldData.get(level);
-        CompoundTag state = data.stateTag(pos);
+        CompoundTag state = stateWithNetwork(data, pos);
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ClientboundOpenMachine(pos, guiId, technical, state,
                         PowerSystem.isTraitor(player), PowerSystem.electronicsSkill(player)));
@@ -66,7 +67,20 @@ public final class PowerPackets {
     public static void sendState(ServerPlayer player, BlockPos pos) {
         if (!(player.level() instanceof ServerLevel level)) return;
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ClientboundMachineState(pos, PowerWorldData.get(level).stateTag(pos)));
+                new ClientboundMachineState(pos, stateWithNetwork(PowerWorldData.get(level), pos)));
+    }
+
+    private static CompoundTag stateWithNetwork(PowerWorldData data, BlockPos pos) {
+        CompoundTag tag = data.stateTag(pos);
+        PowerWorldData.MachineState state = data.machineAt(pos);
+        if (state != null && PowerWorldData.ELECTRICAL_PANEL_GUI.equals(state.guiId())) {
+            double output = data.availableOutput(pos);
+            double demand = state.panelDemand();
+            tag.putDouble("NetworkOutput", output);
+            tag.putDouble("Demand", demand);
+            tag.putBoolean("Powered", state.health() > 0 && output > 0.01D);
+        }
+        return tag;
     }
 
     public record ClientboundOpenBinder(String selected) {
@@ -135,8 +149,15 @@ public final class PowerPackets {
 
         static void handle(ClientboundOpenMachine packet, Supplier<NetworkEvent.Context> context) {
             context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> PowerScreens.openMachine(packet.pos, packet.guiId, packet.technical,
-                            packet.state, packet.traitor, packet.electronicsSkill)));
+                    () -> () -> {
+                        if (PowerWorldData.ELECTRICAL_PANEL_GUI.equals(packet.guiId)) {
+                            ElectricalPanelRealScreen.open(packet.pos, packet.state, packet.technical,
+                                    packet.traitor, packet.electronicsSkill);
+                        } else {
+                            PowerScreens.openMachine(packet.pos, packet.guiId, packet.technical,
+                                    packet.state, packet.traitor, packet.electronicsSkill);
+                        }
+                    }));
             context.get().setPacketHandled(true);
         }
     }
@@ -155,7 +176,10 @@ public final class PowerPackets {
 
         static void handle(ClientboundMachineState packet, Supplier<NetworkEvent.Context> context) {
             context.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> PowerScreens.applyState(packet.pos, packet.state)));
+                    () -> () -> {
+                        PowerScreens.applyState(packet.pos, packet.state);
+                        ElectricalPanelRealScreen.applyState(packet.pos, packet.state);
+                    }));
             context.get().setPacketHandled(true);
         }
     }

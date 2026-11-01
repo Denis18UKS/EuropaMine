@@ -1,0 +1,106 @@
+name: Build EuropaMine Forge requested rework
+
+on:
+  push:
+    branches:
+      - forge-requested-rework-20261101
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Verify preserved and requested sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -f src/main/java/com/z_mods/barotrauma/client/SubmarineCollisionResolver.java
+          test -f src/main/java/com/z_mods/barotrauma/client/ExtraHotbarClientEvents.java
+          test -f src/main/java/com/z_mods/barotrauma/client/NavigationTerminalScreen.java
+          test -f src/main/java/com/z_mods/barotrauma/client/PowerScreens.java
+          test -f src/main/java/com/z_mods/barotrauma/client/ElectricalPanelRealScreen.java
+          test -f src/main/java/com/z_mods/barotrauma/blocks/CabinetBlock.java
+          test -f src/main/java/com/z_mods/barotrauma/item/ChargedSupplyItem.java
+          test -f src/main/java/com/z_mods/barotrauma/submarines/SubmarineZoneData.java
+          test -f src/main/java/com/z_mods/barotrauma/power/ReactorExplosionGuard.java
+          test -f src/main/java/com/z_mods/barotrauma/client/RoundPresentationClient.java
+          test -f src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
+          test -f src/main/resources/assets/barotrauma/models/item/submarine_drawing_tool.json
+
+      - name: Build Forge 1.20.1
+        run: ./gradlew --no-daemon clean build --stacktrace
+
+      - name: Validate built jar
+        shell: bash
+        run: |
+          set -euxo pipefail
+          JAR=$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' | head -n 1)
+          test -n "$JAR"
+          unzip -l "$JAR" | grep -q 'META-INF/mods.toml'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/SubmarineCollisionResolver.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/ExtraHotbarClientEvents.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/NavigationTerminalScreen.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/blocks/CabinetBlock.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/item/ChargedSupplyItem.class'
+          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/power/ReactorExplosionGuard.class'
+          unzip -l "$JAR" | grep -q 'assets/barotrauma/lang/ru_ru.json'
+          unzip -l "$JAR" | grep -q 'assets/barotrauma/textures/gui/navigation_terminal_frame.png'
+          unzip -l "$JAR" | grep -q 'assets/barotrauma/models/item/external_wall_zone_tool.json'
+          cp "$JAR" EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar
+          sha256sum EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar
+
+      - name: Smoke-test dedicated Forge server
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p run
+          printf 'eula=true\nonline-mode=false\n' > run/eula.txt
+          printf 'online-mode=false\n' > run/server.properties
+          set +e
+          timeout 120s ./gradlew --no-daemon runServer --args='nogui' > /tmp/europamine-forge-server.log 2>&1
+          STATUS=$?
+          set -e
+          tail -n 300 /tmp/europamine-forge-server.log
+          if grep -q 'Done (' /tmp/europamine-forge-server.log; then
+            echo "FORGE_SERVER_SMOKE_TEST_PASSED (status=$STATUS)"
+          else
+            echo "FORGE_SERVER_SMOKE_TEST_FAILED (status=$STATUS)"
+            exit 1
+          fi
+
+      - name: Package sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          zip -qr EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip . \
+            -x '.git/*' '.gradle/*' 'build/*' 'run/*' '.gui-assets/*' \
+               'EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip' \
+               'EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar'
+          sha256sum EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip
+          ls -lh EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip
+
+      - name: Upload final files
+        uses: actions/upload-artifact@v4
+        with:
+          name: EuropaMine-Forge-1.20.1-Requested-Rework
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework.jar
+            EuropaMine-0.3.1-Forge-1.20.1-Requested-Rework-Sources.zip

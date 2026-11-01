@@ -3,15 +3,21 @@ package com.z_mods.barotrauma.init;
 import com.z_mods.barotrauma.Barotrauma;
 import com.z_mods.barotrauma.item.AccessConfiguratorItem;
 import com.z_mods.barotrauma.item.AccessNameTagItem;
+import com.z_mods.barotrauma.item.ChargedSupplyItem;
+import com.z_mods.barotrauma.item.DescribedItem;
 import com.z_mods.barotrauma.item.GarnitureHelmetItem;
 import com.z_mods.barotrauma.item.GuiBinderItem;
 import com.z_mods.barotrauma.item.NavigationLinkerItem;
+import com.z_mods.barotrauma.item.OxygenMaskItem;
 import com.z_mods.barotrauma.item.PanelCameraItem;
+import com.z_mods.barotrauma.item.ReactorFuelRodItem;
+import com.z_mods.barotrauma.item.SlotBindingConfiguratorItem;
 import com.z_mods.barotrauma.item.SubmarineBuilderItem;
 import com.z_mods.barotrauma.item.SubmarineDrawingToolItem;
-import com.z_mods.barotrauma.item.SlotBindingConfiguratorItem;
+import com.z_mods.barotrauma.item.SubmarineZoneToolItem;
 import com.z_mods.barotrauma.item.WireToolItem;
 import com.z_mods.barotrauma.power.PowerWorldData;
+import com.z_mods.barotrauma.submarines.SubmarineZoneData;
 import net.minecraft.world.item.ArmorMaterials;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
@@ -19,63 +25,33 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 public class ModItems {
-    public static final DeferredRegister<Item> ITEMS =
-            DeferredRegister.create(ForgeRegistries.ITEMS, Barotrauma.MOD_ID);
-
-    public static final RegistryObject<Item> SLOT_LOCK_TOOL = ITEMS.register("slot_lock_tool",
-            () -> new Item(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> PANEL_CAMERA = ITEMS.register("panel_camera",
-            () -> new PanelCameraItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> GUI_BINDER = ITEMS.register("gui_binder",
-            () -> new GuiBinderItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> NAVIGATION_LINKER = ITEMS.register("navigation_linker",
-            () -> new NavigationLinkerItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> SUBMARINE_BUILDER = ITEMS.register("submarine_builder",
-            () -> new SubmarineBuilderItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> ACTIVE_HAND_SONAR = ITEMS.register("active_hand_sonar",
-            () -> new Item(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> SUBMARINE_DRAWING_TOOL = ITEMS.register("submarine_drawing_tool",
-            () -> new SubmarineDrawingToolItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> SLOT_BINDING_CONFIGURATOR = ITEMS.register("slot_binding_configurator",
-            () -> new SlotBindingConfiguratorItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> RED_WIRE_TOOL = ITEMS.register("red_wire_tool",
-            () -> new WireToolItem(PowerWorldData.WireColor.RED, new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> BLUE_WIRE_TOOL = ITEMS.register("blue_wire_tool",
-            () -> new WireToolItem(PowerWorldData.WireColor.BLUE, new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> REACTOR_FUEL_ROD = ITEMS.register("reactor_fuel_rod",
-            () -> new Item(new Item.Properties().stacksTo(1).durability(24_000)));
-
-    public static final RegistryObject<Item> ACCESS_CONFIGURATOR = ITEMS.register("access_configurator",
-            () -> new AccessConfiguratorItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> NAMETAG = ITEMS.register("nametag",
-            () -> new AccessNameTagItem(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> GARNITURE = ITEMS.register("garniture",
-            () -> new GarnitureHelmetItem(ArmorMaterials.LEATHER, new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> WRENCH = ITEMS.register("wrench",
-            () -> new Item(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> SCREWDIN = ITEMS.register("screwdin",
-            () -> new Item(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> CROWBAR = ITEMS.register("crowbar",
-            () -> new Item(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> OXYGEN_TANK = ITEMS.register("oxygen_tank",
-            () -> new Item(new Item.Properties().stacksTo(1)));
-
-    public static final RegistryObject<Item> WELDING_MACHINE_FUEL_TANK = ITEMS.register("welding_machine_fuel_tank",
-            () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, Barotrauma.MOD_ID);
+    public static final RegistryObject<Item> SLOT_LOCK_TOOL = ITEMS.register("slot_lock_tool", () -> new DescribedItem(new Item.Properties().stacksTo(1), "Блокирует выбранные ячейки контейнера."));
+    public static final RegistryObject<Item> PANEL_CAMERA = ITEMS.register("panel_camera", () -> new PanelCameraItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> GUI_BINDER = ITEMS.register("gui_binder", () -> new GuiBinderItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> NAVIGATION_LINKER = ITEMS.register("navigation_linker", () -> new NavigationLinkerItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> SUBMARINE_BUILDER = ITEMS.register("submarine_builder", () -> new SubmarineBuilderItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> ACTIVE_HAND_SONAR = ITEMS.register("active_hand_sonar", () -> new DescribedItem(new Item.Properties().stacksTo(1), "Переносной активный сонар для ручной разведки."));
+    public static final RegistryObject<Item> SUBMARINE_DRAWING_TOOL = ITEMS.register("submarine_drawing_tool", () -> new SubmarineDrawingToolItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> SLOT_BINDING_CONFIGURATOR = ITEMS.register("slot_binding_configurator", () -> new SlotBindingConfiguratorItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> EXTERNAL_WALL_ZONE_TOOL = ITEMS.register("external_wall_zone_tool", () -> new SubmarineZoneToolItem(SubmarineZoneData.Kind.EXTERNAL_WALL, new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> INTERNAL_WALL_ZONE_TOOL = ITEMS.register("internal_wall_zone_tool", () -> new SubmarineZoneToolItem(SubmarineZoneData.Kind.INTERNAL_WALL, new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> FLOOR_ZONE_TOOL = ITEMS.register("floor_zone_tool", () -> new SubmarineZoneToolItem(SubmarineZoneData.Kind.FLOOR, new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> RED_WIRE_TOOL = ITEMS.register("red_wire_tool", () -> new WireToolItem(PowerWorldData.WireColor.RED, new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> BLUE_WIRE_TOOL = ITEMS.register("blue_wire_tool", () -> new WireToolItem(PowerWorldData.WireColor.BLUE, new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> REACTOR_FUEL_ROD = ITEMS.register("reactor_fuel_rod", () -> new ReactorFuelRodItem(new Item.Properties().stacksTo(1).durability(24_000)));
+    public static final RegistryObject<Item> ACCESS_CONFIGURATOR = ITEMS.register("access_configurator", () -> new AccessConfiguratorItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> NAMETAG = ITEMS.register("nametag", () -> new AccessNameTagItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> GARNITURE = ITEMS.register("garniture", () -> new GarnitureHelmetItem(ArmorMaterials.LEATHER, new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> WRENCH = ITEMS.register("wrench", () -> new DescribedItem(new Item.Properties().stacksTo(1), "Позволяет обслуживать механические устройства подлодки."));
+    public static final RegistryObject<Item> SCREWDIN = ITEMS.register("screwdin", () -> new DescribedItem(new Item.Properties().stacksTo(1), "Позволяет чинить электрику и работать с проводкой."));
+    public static final RegistryObject<Item> CROWBAR = ITEMS.register("crowbar", () -> new DescribedItem(new Item.Properties().stacksTo(1), "Инструмент для аварийного доступа и ремонта конструкций."));
+    public static final RegistryObject<Item> OXYGEN_TANK = ITEMS.register("oxygen_tank", () -> new DescribedItem(new Item.Properties().stacksTo(64), "Кислородный баллон для резака и дыхательных систем."));
+    public static final RegistryObject<Item> WELDING_MACHINE_FUEL_TANK = ITEMS.register("welding_machine_fuel_tank", () -> new DescribedItem(new Item.Properties().stacksTo(64), "Баллон сварочного топлива для сварочного аппарата."));
+    public static final RegistryObject<Item> WELDING_MACHINE = ITEMS.register("welding_machine", () -> new ChargedSupplyItem(ChargedSupplyItem.SupplyKind.WELDING_FUEL, "Позволяет сваривать и герметизировать конструкции.", "Механика 50", new Item.Properties()));
+    public static final RegistryObject<Item> CUTTER = ITEMS.register("cutter", () -> new ChargedSupplyItem(ChargedSupplyItem.SupplyKind.OXYGEN, "Режет металлические конструкции направленной струёй.", "Механика 45", new Item.Properties()));
+    public static final RegistryObject<Item> OXYGEN_MASK = ITEMS.register("oxygen_mask", () -> new OxygenMaskItem(ArmorMaterials.LEATHER, new Item.Properties()));
+    public static final RegistryObject<Item> TOOL_BELT = ITEMS.register("tool_belt", () -> new DescribedItem(new Item.Properties().stacksTo(1), "Пояс для хранения рабочего снаряжения."));
+    public static final RegistryObject<Item> CRATE = ITEMS.register("crate", () -> new DescribedItem(new Item.Properties().stacksTo(16), "Ящик для специализированных ячеек стальных шкафов."));
+    public static final RegistryObject<Item> LARGE_CRATE = ITEMS.register("large_crate", () -> new DescribedItem(new Item.Properties().stacksTo(8), "Большой ящик для специализированных ячеек стальных шкафов."));
 }

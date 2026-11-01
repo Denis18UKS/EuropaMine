@@ -11,8 +11,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.PacketDistributor;
 
 import java.util.function.Supplier;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
@@ -194,6 +197,12 @@ public final class PanelPackets {
                 }
                 player.server.getPlayerList().broadcastSystemMessage(Component.translatable(
                         "message.barotrauma.session_started", PanelSettings.SUBMARINES.get(settings.submarine)), false);
+                List<String> missions = settings.selectedMissions();
+                String mission = missions.isEmpty()
+                        ? "Свободная миссия: обеспечьте безопасность и работоспособность подлодки."
+                        : missions.get(ThreadLocalRandom.current().nextInt(missions.size()));
+                ModNetworking.CHANNEL.send(PacketDistributor.ALL.noArg(),
+                        new RoundPackets.ClientboundRoundStart(mission, 100));
             });
             context.setPacketHandled(true);
         }

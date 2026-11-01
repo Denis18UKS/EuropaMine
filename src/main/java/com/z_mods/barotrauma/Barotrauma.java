@@ -14,6 +14,7 @@ import com.z_mods.barotrauma.client.SettingsPanelRenderer;
 import com.z_mods.barotrauma.client.HotbarLayoutPanelRenderer;
 import com.z_mods.barotrauma.client.SubmarineContraptionRenderer;
 import com.z_mods.barotrauma.client.VentScreen;
+import com.z_mods.barotrauma.client.CabinetScreen;
 import com.z_mods.barotrauma.network.ModNetworking;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
@@ -37,100 +38,37 @@ public class Barotrauma {
 
     public Barotrauma() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-
         GeckoLib.initialize();
-
         ModItems.ITEMS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlockGroup.CREATIVE_MODE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModEntities.ENTITY_TYPES.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
-
         ModNetworking.register();
         modEventBus.addListener(this::addCreative);
-
         MinecraftForge.EVENT_BUS.register(this);
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTab() == ModBlockGroup.BAROTRAUMA_TAB.get()) {
-            event.accept(ModBlocks.VENT_DECO.get());
-            event.accept(ModBlocks.VENT_DECO_INT.get());
-            event.accept(ModBlocks.NAVIGATION_TERMINAL.get());
-            event.accept(ModBlocks.SETTINGS_PANEL.get());
-            event.accept(ModBlocks.HOTBAR_LAYOUT_PANEL.get());
-            event.accept(ModBlocks.BEDS.get());
-            event.accept(ModBlocks.JUNCTION_BOX.get());
-            event.accept(ModBlocks.SUBMARINE_BUTTON_BLOCK.get());
-            event.accept(ModBlocks.SUBMARINE_DOOR.get());
-            event.accept(ModBlocks.SUBMARINE_LEVER.get());
-            event.accept(ModBlocks.SUBMARINE_TRAPDOOR.get());
-        }
-
-        if (event.getTab() == ModBlockGroup.BAROTRAUMA_TOOLS_TAB.get()) {
-            event.accept(ModItems.NAMETAG.get());
-            event.accept(ModItems.ACCESS_CONFIGURATOR.get());
-            event.accept(ModItems.SLOT_LOCK_TOOL.get());
-            event.accept(ModItems.GARNITURE.get());
-            event.accept(ModItems.WRENCH.get());
-            event.accept(ModItems.SCREWDIN.get());
-            event.accept(ModItems.CROWBAR.get());
-            event.accept(ModItems.OXYGEN_TANK.get());
-            event.accept(ModItems.WELDING_MACHINE_FUEL_TANK.get());
-            event.accept(ModItems.PANEL_CAMERA.get());
-            event.accept(ModItems.GUI_BINDER.get());
-            event.accept(ModItems.NAVIGATION_LINKER.get());
-            event.accept(ModItems.SUBMARINE_BUILDER.get());
-            event.accept(ModItems.ACTIVE_HAND_SONAR.get());
-            event.accept(ModItems.SUBMARINE_DRAWING_TOOL.get());
-            event.accept(ModItems.SLOT_BINDING_CONFIGURATOR.get());
-            event.accept(ModItems.RED_WIRE_TOOL.get());
-            event.accept(ModItems.BLUE_WIRE_TOOL.get());
-            event.accept(ModItems.REACTOR_FUEL_ROD.get());
-        }
+        // Entries are declared directly by ModBlockGroup to avoid duplicates.
     }
 
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-    }
+    @SubscribeEvent public void onServerStarting(ServerStartingEvent event) { }
 
     @Mod.EventBusSubscriber(modid = Barotrauma.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
             event.enqueueWork(() -> {
-                BlockEntityRenderers.register(
-                    ModBlockEntities.VENT_DECO.get(),
-                    context -> new VentDecoRenderer()
-                );
-
-                BlockEntityRenderers.register(
-                    ModBlockEntities.VENT_DECO_INT.get(),
-                    context -> new VentDecoIntRenderer()
-                );
-
-                BlockEntityRenderers.register(
-                    ModBlockEntities.ANIMATED_STRUCTURE_CONFIG.get(),
-                    context -> new StructureConfigBlockRenderer()
-                );
-
+                BlockEntityRenderers.register(ModBlockEntities.VENT_DECO.get(), context -> new VentDecoRenderer());
+                BlockEntityRenderers.register(ModBlockEntities.VENT_DECO_INT.get(), context -> new VentDecoIntRenderer());
+                BlockEntityRenderers.register(ModBlockEntities.ANIMATED_STRUCTURE_CONFIG.get(), context -> new StructureConfigBlockRenderer());
                 MenuScreens.register(ModMenus.VENT_MENU.get(), VentScreen::new);
-
-                BlockEntityRenderers.register(
-                    ModBlockEntities.SETTINGS_PANEL.get(),
-                    SettingsPanelRenderer::new
-                );
-
-                BlockEntityRenderers.register(
-                    ModBlockEntities.HOTBAR_LAYOUT_PANEL.get(),
-                    HotbarLayoutPanelRenderer::new
-                );
-
-                EntityRenderers.register(
-                    ModEntities.SUBMARINE_CONTRAPTION.get(),
-                    SubmarineContraptionRenderer::new
-                );
+                MenuScreens.register(ModMenus.CABINET_MENU.get(), CabinetScreen::new);
+                BlockEntityRenderers.register(ModBlockEntities.SETTINGS_PANEL.get(), SettingsPanelRenderer::new);
+                BlockEntityRenderers.register(ModBlockEntities.HOTBAR_LAYOUT_PANEL.get(), HotbarLayoutPanelRenderer::new);
+                EntityRenderers.register(ModEntities.SUBMARINE_CONTRAPTION.get(), SubmarineContraptionRenderer::new);
             });
         }
     }

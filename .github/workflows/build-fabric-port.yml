@@ -141,7 +141,8 @@ jobs:
           test "$(zipinfo -1 "$JAR" | grep '^assets/barotrauma/' | grep -v '/$' | wc -l)" -eq 109
           test "$(zipinfo -1 "$JAR" | grep '^data/barotrauma/' | grep -v '/$' | wc -l)" -eq 9
           cp "$JAR" EuropaMine-0.3.0-Fabric-1.20.1.jar
-          tar -czf EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz -C .fabric-work/project common fabric-1.20.1 shared-resources
+          rm -rf .fabric-work/project/fabric-1.20.1/run
+          tar --exclude='fabric-1.20.1/build' --exclude='fabric-1.20.1/.gradle' -czf EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz -C .fabric-work/project common fabric-1.20.1 shared-resources
           sha256sum EuropaMine-0.3.0-Fabric-1.20.1.jar EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz
           ls -lh EuropaMine-0.3.0-Fabric-1.20.1.jar EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz
 

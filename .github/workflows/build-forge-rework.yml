@@ -31,6 +31,8 @@ jobs:
           git apply ci/fixes/compile-2.patch
           git apply --check ci/fixes/feature-gap-submarine-selector.patch
           git apply ci/fixes/feature-gap-submarine-selector.patch
+          git apply --check ci/fixes/inventory-adaptive.patch
+          git apply ci/fixes/inventory-adaptive.patch
           git diff --check
 
       - name: Set up Java 17

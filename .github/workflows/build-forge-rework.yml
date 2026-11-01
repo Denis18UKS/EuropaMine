@@ -27,6 +27,8 @@ jobs:
           git apply /tmp/europamine-round2.patch
           git apply --check ci/fixes/recipe-book-1.patch
           git apply ci/fixes/recipe-book-1.patch
+          git apply --check ci/fixes/compile-2.patch
+          git apply ci/fixes/compile-2.patch
           git diff --check
 
       - name: Set up Java 17

@@ -1,9 +1,8 @@
 package com.z_mods.barotrauma.network;
 
-import com.z_mods.barotrauma.client.SlotBindingConfiguratorScreen;
+import com.z_mods.barotrauma.client.SlotBindingClientPacketHandlers;
 import com.z_mods.barotrauma.hotbar.ExtraHotbar;
 import com.z_mods.barotrauma.hotbar.SlotBindingManager;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -46,7 +45,7 @@ public final class SlotBindingPackets {
         }
         static void handle(ClientboundOpenSlotBindings packet, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                    () -> () -> Minecraft.getInstance().setScreen(new SlotBindingConfiguratorScreen(packet.bindings))));
+                    () -> () -> SlotBindingClientPacketHandlers.open(packet.bindings)));
             ctx.get().setPacketHandled(true);
         }
     }

@@ -1,0 +1,135 @@
+diff --git a/scripts/logic-tests/LogicBehaviorTest.java b/scripts/logic-tests/LogicBehaviorTest.java
+index 3ef76b6..85272bd 100644
+--- a/scripts/logic-tests/LogicBehaviorTest.java
++++ b/scripts/logic-tests/LogicBehaviorTest.java
+@@ -1,6 +1,10 @@
+ import com.z_mods.barotrauma.logic.HudLayoutMath;
+ import com.z_mods.barotrauma.logic.ReactorSafetyLogic;
+ import com.z_mods.barotrauma.logic.ToolSafetyLogic;
++import com.z_mods.barotrauma.logic.SubmarineCommandLogic;
++
++import java.util.List;
++import java.util.UUID;
+ 
+ public final class LogicBehaviorTest {
+     public static void main(String[] args) {
+@@ -21,6 +25,20 @@ public final class LogicBehaviorTest {
+         require(ToolSafetyLogic.shouldExplode(true, true), "wrong supply must explode on activation");
+         require(!ToolSafetyLogic.shouldExplode(true, false), "correct supply must not explode");
+         require(ToolSafetyLogic.nextCondition(10, 3) == 7, "tool condition must wear down");
++
++        UUID alphaId = UUID.fromString("00000000-0000-0000-0000-000000000001");
++        UUID betaId = UUID.fromString("00000000-0000-0000-0000-000000000002");
++        var vessels = List.of(
++                new SubmarineCommandLogic.VesselRef(alphaId, "Барсук"),
++                new SubmarineCommandLogic.VesselRef(betaId, "Europa Prime"));
++        require(SubmarineCommandLogic.resolve("Барсук", vessels).orElseThrow().equals(alphaId),
++                "submarine selector must resolve exact name");
++        require(SubmarineCommandLogic.resolve(betaId.toString(), vessels).orElseThrow().equals(betaId),
++                "submarine selector must resolve UUID");
++        require(SubmarineCommandLogic.resolve("europa prime", vessels).orElseThrow().equals(betaId),
++                "submarine selector must resolve names case-insensitively");
++        require(SubmarineCommandLogic.resolve("unknown", vessels).isEmpty(),
++                "unknown submarine selector must not resolve");
+         System.out.println("LOGIC TESTS PASSED");
+     }
+ 
+diff --git a/src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java b/src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java
+new file mode 100644
+index 0000000..9cd73da
+--- /dev/null
++++ b/src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java
+@@ -0,0 +1,30 @@
++package com.z_mods.barotrauma.logic;
++
++import java.util.List;
++import java.util.Optional;
++import java.util.UUID;
++
++/** Loader-neutral selector rules for destructive submarine commands. */
++public final class SubmarineCommandLogic {
++    private SubmarineCommandLogic() {}
++
++    public record VesselRef(UUID id, String name) {}
++
++    public static Optional<UUID> resolve(String selector, List<VesselRef> vessels) {
++        if (selector == null || selector.isBlank() || vessels == null || vessels.isEmpty()) return Optional.empty();
++        String value = selector.trim();
++        try {
++            UUID id = UUID.fromString(value);
++            return vessels.stream().anyMatch(v -> v.id().equals(id)) ? Optional.of(id) : Optional.empty();
++        } catch (IllegalArgumentException ignored) {
++        }
++        UUID match = null;
++        for (VesselRef vessel : vessels) {
++            if (vessel.name() == null || !vessel.name().equalsIgnoreCase(value)) continue;
++            if (match != null && !match.equals(vessel.id())) return Optional.empty();
++            match = vessel.id();
++        }
++        return Optional.ofNullable(match);
++    }
++}
+diff --git a/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java b/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
+index a948d17..3d03a15 100644
+--- a/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
++++ b/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
+@@ -3,6 +3,7 @@ package com.z_mods.barotrauma.navigation;
+ import com.mojang.brigadier.arguments.StringArgumentType;
+ import com.z_mods.barotrauma.Barotrauma;
+ import com.z_mods.barotrauma.network.NavigationPackets;
++import com.z_mods.barotrauma.logic.SubmarineCommandLogic;
+ import com.z_mods.barotrauma.power.PowerWorldData;
+ import net.minecraft.commands.Commands;
+ import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+@@ -120,30 +121,36 @@ public final class NavigationSystem {
+                                     return vessels.size();
+                                 }))
+                         .then(Commands.literal("delete")
+-                                .then(Commands.argument("uuid", StringArgumentType.word())
++                                .then(Commands.argument("selector", StringArgumentType.string())
+                                         .executes(context -> {
++                                            String selector = StringArgumentType.getString(context, "selector");
+                                             context.getSource().sendFailure(Component.literal(
+-                                                    "Для защиты от случайного удаления допишите confirm после UUID."));
++                                                    "Для защиты от случайного удаления допишите confirm после \"" + selector + "\"."));
+                                             return 0;
+                                         })
+                                         .then(Commands.literal("confirm")
+                                                 .executes(context -> {
+-                                                    try {
+-                                                        UUID id = UUID.fromString(StringArgumentType.getString(context, "uuid"));
+-                                                        boolean removed = NavigationWorldData.get(context.getSource().getLevel())
+-                                                                .removeVessel(context.getSource().getLevel(), id);
+-                                                        if (removed) {
+-                                                            context.getSource().sendSuccess(() -> Component.literal(
+-                                                                    "Подлодка удалена из реестра: " + id), true);
+-                                                            return 1;
+-                                                        }
++                                                    ServerLevel level = context.getSource().getLevel();
++                                                    NavigationWorldData data = NavigationWorldData.get(level);
++                                                    String selector = StringArgumentType.getString(context, "selector");
++                                                    var refs = data.allVessels().stream()
++                                                            .map(v -> new SubmarineCommandLogic.VesselRef(v.id(), v.name()))
++                                                            .toList();
++                                                    var resolved = SubmarineCommandLogic.resolve(selector, refs);
++                                                    if (resolved.isEmpty()) {
+                                                         context.getSource().sendFailure(Component.literal(
+-                                                                "Подлодка с таким UUID не найдена."));
+-                                                        return 0;
+-                                                    } catch (IllegalArgumentException ex) {
+-                                                        context.getSource().sendFailure(Component.literal("Некорректный UUID."));
++                                                                "Подлодка не найдена или имя неоднозначно: " + selector));
+                                                         return 0;
+                                                     }
++                                                    UUID id = resolved.get();
++                                                    boolean removed = data.removeVessel(level, id);
++                                                    if (removed) {
++                                                        context.getSource().sendSuccess(() -> Component.literal(
++                                                                "Подлодка удалена из реестра: " + selector + " [" + id + "]"), true);
++                                                        return 1;
++                                                    }
++                                                    context.getSource().sendFailure(Component.literal("Не удалось удалить подлодку: " + selector));
++                                                    return 0;
+                                                 })))))
+                 .then(Commands.literal("types")
+                         .executes(context -> {

@@ -1,0 +1,82 @@
+name: Build EuropaMine Fabric 1.20.1 port
+
+on:
+  push:
+    branches:
+      - fabric-1.20.1-port-final
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.3
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.3'
+
+      - name: Reconstruct Fabric source tree
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf .fabric-work
+          mkdir -p .fabric-work
+          cat .fabric-port/source.b64.part* | base64 -d > /tmp/europamine-fabric-source.tar.gz
+          tar -xzf /tmp/europamine-fabric-source.tar.gz -C .fabric-work
+          mkdir -p .fabric-work/project/shared-resources
+          if [ -d src/main/resources/assets ]; then cp -a src/main/resources/assets .fabric-work/project/shared-resources/; fi
+          if [ -d src/main/resources/data ]; then cp -a src/main/resources/data .fabric-work/project/shared-resources/; fi
+          if [ -f src/main/resources/pack.mcmeta ]; then cp -a src/main/resources/pack.mcmeta .fabric-work/project/shared-resources/; fi
+          find .fabric-work/project -maxdepth 4 -type f | sort | head -200
+
+      - name: Run loader-independent core tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/europamine-core-test
+          mkdir -p /tmp/europamine-core-test
+          javac -encoding UTF-8 -source 17 -target 17 -d /tmp/europamine-core-test \
+            $(find .fabric-work/project/common/src/main/java -name '*.java' -print) \
+            $(find .fabric-work/project/common/src/test/java -name '*.java' -print)
+          java -cp /tmp/europamine-core-test com.z_mods.barotrauma.core.CoreBehaviorTest
+
+      - name: Build Fabric 1.20.1 jar
+        shell: bash
+        working-directory: .fabric-work/project/fabric-1.20.1
+        run: gradle --no-daemon clean build --stacktrace
+
+      - name: Validate jar metadata and original resources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          JAR=$(find .fabric-work/project/fabric-1.20.1/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' | head -n 1)
+          test -n "$JAR"
+          unzip -l "$JAR" | grep -q 'fabric.mod.json'
+          unzip -l "$JAR" | grep -q 'assets/barotrauma/'
+          unzip -l "$JAR" | grep -q 'data/barotrauma/'
+          unzip -p "$JAR" fabric.mod.json | grep -q '"id": "barotrauma"'
+          cp "$JAR" EuropaMine-0.3.0-Fabric-1.20.1.jar
+          tar -czf EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz -C .fabric-work/project common fabric-1.20.1 shared-resources
+          ls -lh EuropaMine-0.3.0-Fabric-1.20.1.jar EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz
+
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: EuropaMine-Fabric-1.20.1
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            EuropaMine-0.3.0-Fabric-1.20.1.jar
+            EuropaMine-0.3.0-Fabric-1.20.1-Sources.tar.gz

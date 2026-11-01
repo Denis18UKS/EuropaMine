@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "barotrauma",
+  "version": "${version}",
+  "name": "EuropaMine",
+  "description": "EuropaMine Fabric port",
+  "authors": ["pawel3k1", "Denis18UKS"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.z_mods.barotrauma.fabric.EuropaMineFabric"]
+  },
+  "mixins": ["barotrauma.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

@@ -36,10 +36,10 @@ index 3ef76b6..85272bd 100644
  
 diff --git a/src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java b/src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java
 new file mode 100644
-index 0000000..9cd73da
+index 0000000..511738f
 --- /dev/null
 +++ b/src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,29 @@
 +package com.z_mods.barotrauma.logic;
 +
 +import java.util.List;
@@ -70,7 +70,7 @@ index 0000000..9cd73da
 +    }
 +}
 diff --git a/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java b/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
-index a948d17..3d03a15 100644
+index a948d17..2877f3f 100644
 --- a/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
 +++ b/src/main/java/com/z_mods/barotrauma/navigation/NavigationSystem.java
 @@ -3,6 +3,7 @@ package com.z_mods.barotrauma.navigation;

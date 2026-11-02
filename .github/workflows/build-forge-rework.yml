@@ -47,6 +47,11 @@ jobs:
           echo '2d72e791610458f8a377d3a92fe04f122b274b174a1641d0401385890bed0dd8  /tmp/europamine-v042.patch' | sha256sum -c -
           git apply --check /tmp/europamine-v042.patch
           git apply /tmp/europamine-v042.patch
+          echo 'e4d840a9fccb1c8c85d0cc5eed063c6192ea22e279271ee084e1672109b9f2e0  ci/v042-newfiles.b64' | sha256sum -c -
+          base64 -d ci/v042-newfiles.b64 | gzip -d > /tmp/europamine-v042-newfiles.patch
+          echo 'b8850602731262f155dc73b4c6291d78e5cc8b8ac5e15644b824d9acd36200b3  /tmp/europamine-v042-newfiles.patch' | sha256sum -c -
+          git apply --check /tmp/europamine-v042-newfiles.patch
+          git apply /tmp/europamine-v042-newfiles.patch
           git diff --check
 
       - name: Set up Java 17

@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply round-2 rework patch
+      - name: Apply requested rework patches
         shell: bash
         run: |
           set -euxo pipefail
@@ -33,6 +33,13 @@ jobs:
           git apply ci/fixes/feature-gap-submarine-selector.patch
           git apply --check ci/fixes/inventory-adaptive.patch
           git apply ci/fixes/inventory-adaptive.patch
+
+          cat ci/v041-chunks/part-* > /tmp/v041-full.b64
+          echo 'ba91bc9e7d9276223453841e7882eecbffb2ed7ccafe42b7b4adb4e6aa5175da  /tmp/v041-full.b64' | sha256sum -c -
+          base64 -d /tmp/v041-full.b64 | gzip -d > /tmp/europamine-v041.patch
+          echo 'aa9b82faeeec23d735b5adf574457017252fc15bdb0ba34c8d12ee5d911a680c  /tmp/europamine-v041.patch' | sha256sum -c -
+          git apply --check /tmp/europamine-v041.patch
+          git apply /tmp/europamine-v041.patch
           git diff --check
 
       - name: Set up Java 17
@@ -59,13 +66,16 @@ jobs:
           test -f src/main/java/com/z_mods/barotrauma/submarines/SubmarineZoneData.java
           test -f src/main/java/com/z_mods/barotrauma/power/ReactorExplosionGuard.java
           test -f src/main/java/com/z_mods/barotrauma/client/RoundPresentationClient.java
-          test -f src/main/resources/assets/barotrauma/textures/gui/navigation_terminal_frame.png
-          test -f src/main/resources/assets/barotrauma/models/item/submarine_drawing_tool.json
           test -f src/main/java/com/z_mods/barotrauma/client/HudOverlayEvents.java
           test -f src/main/java/com/z_mods/barotrauma/client/PowerWorldVisualRenderer.java
           test -f src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java
           test -f src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java
           test -f src/main/resources/assets/barotrauma/shaders/core/world_fx.json
+          test -f src/main/java/com/z_mods/barotrauma/client/MovableHotbarRenderer.java
+          test -f src/main/java/com/z_mods/barotrauma/mixin/impl/GuiHotbarMixin.java
+          test -f src/main/java/com/z_mods/barotrauma/power/BlockIntegrityData.java
+          test -f src/main/java/com/z_mods/barotrauma/logic/BlockIntegrityLogic.java
+          test -f src/main/java/com/z_mods/barotrauma/logic/HudModeLogic.java
 
       - name: Run pure behavior tests
         shell: bash
@@ -78,6 +88,8 @@ jobs:
             src/main/java/com/z_mods/barotrauma/logic/ReactorSafetyLogic.java \
             src/main/java/com/z_mods/barotrauma/logic/ToolSafetyLogic.java \
             src/main/java/com/z_mods/barotrauma/logic/SubmarineCommandLogic.java \
+            src/main/java/com/z_mods/barotrauma/logic/BlockIntegrityLogic.java \
+            src/main/java/com/z_mods/barotrauma/logic/HudModeLogic.java \
             scripts/logic-tests/LogicBehaviorTest.java
           java -cp /tmp/europamine-logic-test LogicBehaviorTest
 
@@ -90,22 +102,19 @@ jobs:
           set -euxo pipefail
           JAR=$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' | head -n 1)
           test -n "$JAR"
-          unzip -l "$JAR" | grep -q 'META-INF/mods.toml'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/SubmarineCollisionResolver.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/ExtraHotbarClientEvents.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/NavigationTerminalScreen.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/blocks/CabinetBlock.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/item/ChargedSupplyItem.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/power/ReactorExplosionGuard.class'
-          unzip -l "$JAR" | grep -q 'assets/barotrauma/lang/ru_ru.json'
-          unzip -l "$JAR" | grep -q 'assets/barotrauma/textures/gui/navigation_terminal_frame.png'
-          unzip -l "$JAR" | grep -q 'assets/barotrauma/models/item/external_wall_zone_tool.json'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/client/PowerWorldVisualRenderer.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/logic/ReactorSafetyLogic.class'
-          unzip -l "$JAR" | grep -q 'com/z_mods/barotrauma/logic/SubmarineCommandLogic.class'
-          unzip -l "$JAR" | grep -q 'assets/barotrauma/shaders/core/world_fx.json'
-          cp "$JAR" EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
-          sha256sum EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
+          unzip -l "$JAR" > /tmp/jar-list.txt
+          grep -q 'META-INF/mods.toml' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/client/SubmarineCollisionResolver.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/client/ExtraHotbarClientEvents.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/client/NavigationTerminalScreen.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/client/MovableHotbarRenderer.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/mixin/impl/GuiHotbarMixin.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/power/BlockIntegrityData.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/logic/BlockIntegrityLogic.class' /tmp/jar-list.txt
+          grep -q 'com/z_mods/barotrauma/logic/HudModeLogic.class' /tmp/jar-list.txt
+          grep -q 'assets/barotrauma/shaders/core/world_fx.json' /tmp/jar-list.txt
+          cp "$JAR" EuropaMine-0.4.1-Forge-1.20.1-Rework.jar
+          sha256sum EuropaMine-0.4.1-Forge-1.20.1-Rework.jar
 
       - name: Smoke-test dedicated Forge server
         shell: bash
@@ -130,19 +139,19 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          zip -qr EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip . \
+          zip -qr EuropaMine-0.4.1-Forge-1.20.1-Rework-Sources.zip . \
             -x '.git/*' '.gradle/*' 'build/*' 'run/*' '.gui-assets/*' \
-               'EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip' \
-               'EuropaMine-0.4.0-Forge-1.20.1-Rework.jar' 'ci/*'
-          sha256sum EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
-          ls -lh EuropaMine-0.4.0-Forge-1.20.1-Rework.jar EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
+               'EuropaMine-0.4.1-Forge-1.20.1-Rework-Sources.zip' \
+               'EuropaMine-0.4.1-Forge-1.20.1-Rework.jar' 'ci/*'
+          sha256sum EuropaMine-0.4.1-Forge-1.20.1-Rework-Sources.zip
+          ls -lh EuropaMine-0.4.1-Forge-1.20.1-Rework.jar EuropaMine-0.4.1-Forge-1.20.1-Rework-Sources.zip
 
       - name: Upload final files
         uses: actions/upload-artifact@v4
         with:
-          name: EuropaMine-Forge-1.20.1-Rework-v0.4.0
+          name: EuropaMine-Forge-1.20.1-Rework-v0.4.1
           if-no-files-found: error
           retention-days: 7
           path: |
-            EuropaMine-0.4.0-Forge-1.20.1-Rework.jar
-            EuropaMine-0.4.0-Forge-1.20.1-Rework-Sources.zip
+            EuropaMine-0.4.1-Forge-1.20.1-Rework.jar
+            EuropaMine-0.4.1-Forge-1.20.1-Rework-Sources.zip

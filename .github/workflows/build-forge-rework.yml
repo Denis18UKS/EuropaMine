@@ -59,6 +59,13 @@ jobs:
           echo 'c5cb649513848c31f167d86a7e2cb8b29c4503af42d68e48ec53c411de385e1a  /tmp/europamine-v043.patch' | sha256sum -c -
           git apply --check /tmp/europamine-v043.patch
           git apply /tmp/europamine-v043.patch
+
+          cat ci/v044-chunks/part-* > /tmp/v044-full.b64
+          echo '7861c2ada392212f3b18e04341173b85243d9cc93872b4626a3ac30006825706  /tmp/v044-full.b64' | sha256sum -c -
+          base64 -d /tmp/v044-full.b64 | gzip -d > /tmp/europamine-v044.patch
+          echo '994b560ba95416efe58e7c7b9c9ec99ca50edf69e5450a04f38ba85fe912fdbf  /tmp/europamine-v044.patch' | sha256sum -c -
+          git apply --check /tmp/europamine-v044.patch
+          git apply /tmp/europamine-v044.patch
           git diff --check
 
       - name: Set up Java 17
@@ -101,6 +108,7 @@ jobs:
           test -f src/main/resources/assets/barotrauma/shaders/core/tool_fx.json
           test -f src/main/java/com/z_mods/barotrauma/client/CreativeWireRemovalClient.java
           test -f src/main/java/com/z_mods/barotrauma/logic/WireRemovalLogic.java
+          test -f src/main/java/com/z_mods/barotrauma/logic/ToolSparkMotion.java
 
       - name: Run pure behavior tests
         shell: bash
@@ -116,6 +124,7 @@ jobs:
             src/main/java/com/z_mods/barotrauma/logic/BlockIntegrityLogic.java \
             src/main/java/com/z_mods/barotrauma/logic/HudModeLogic.java \
             src/main/java/com/z_mods/barotrauma/logic/WireRemovalLogic.java \
+            src/main/java/com/z_mods/barotrauma/logic/ToolSparkMotion.java \
             scripts/logic-tests/LogicBehaviorTest.java
           java -cp /tmp/europamine-logic-test LogicBehaviorTest
 
@@ -145,8 +154,9 @@ jobs:
           grep -q 'assets/barotrauma/shaders/core/tool_fx.json' /tmp/jar-list.txt
           grep -q 'com/z_mods/barotrauma/client/CreativeWireRemovalClient.class' /tmp/jar-list.txt
           grep -q 'com/z_mods/barotrauma/logic/WireRemovalLogic.class' /tmp/jar-list.txt
-          cp "$JAR" EuropaMine-0.4.3-Forge-1.20.1-Rework.jar
-          sha256sum EuropaMine-0.4.3-Forge-1.20.1-Rework.jar
+          grep -q 'com/z_mods/barotrauma/logic/ToolSparkMotion.class' /tmp/jar-list.txt
+          cp "$JAR" EuropaMine-0.4.4-Forge-1.20.1-Rework.jar
+          sha256sum EuropaMine-0.4.4-Forge-1.20.1-Rework.jar
 
       - name: Smoke-test dedicated Forge server
         shell: bash
@@ -171,19 +181,19 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          zip -qr EuropaMine-0.4.3-Forge-1.20.1-Rework-Sources.zip . \
+          zip -qr EuropaMine-0.4.4-Forge-1.20.1-Rework-Sources.zip . \
             -x '.git/*' '.gradle/*' 'build/*' 'run/*' '.gui-assets/*' \
-               'EuropaMine-0.4.3-Forge-1.20.1-Rework-Sources.zip' \
-               'EuropaMine-0.4.3-Forge-1.20.1-Rework.jar' 'ci/*'
-          sha256sum EuropaMine-0.4.3-Forge-1.20.1-Rework-Sources.zip
-          ls -lh EuropaMine-0.4.3-Forge-1.20.1-Rework.jar EuropaMine-0.4.3-Forge-1.20.1-Rework-Sources.zip
+               'EuropaMine-0.4.4-Forge-1.20.1-Rework-Sources.zip' \
+               'EuropaMine-0.4.4-Forge-1.20.1-Rework.jar' 'ci/*'
+          sha256sum EuropaMine-0.4.4-Forge-1.20.1-Rework-Sources.zip
+          ls -lh EuropaMine-0.4.4-Forge-1.20.1-Rework.jar EuropaMine-0.4.4-Forge-1.20.1-Rework-Sources.zip
 
       - name: Upload final files
         uses: actions/upload-artifact@v4
         with:
-          name: EuropaMine-Forge-1.20.1-Rework-v0.4.3
+          name: EuropaMine-Forge-1.20.1-Rework-v0.4.4
           if-no-files-found: error
           retention-days: 7
           path: |
-            EuropaMine-0.4.3-Forge-1.20.1-Rework.jar
-            EuropaMine-0.4.3-Forge-1.20.1-Rework-Sources.zip
+            EuropaMine-0.4.4-Forge-1.20.1-Rework.jar
+            EuropaMine-0.4.4-Forge-1.20.1-Rework-Sources.zip
